@@ -36,7 +36,10 @@ db.exec(`
     total_distance_km REAL DEFAULT 0,
     max_crossings_in_trip INTEGER DEFAULT 0,
     created_at INTEGER NOT NULL,
-    is_admin BOOLEAN DEFAULT 0
+    is_admin BOOLEAN DEFAULT 0,
+    recovery_phrase TEXT,
+    email TEXT,
+    phone TEXT
   );
 
   CREATE TABLE IF NOT EXISTS game_sessions (
@@ -48,6 +51,32 @@ db.exec(`
     ended_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS password_reset_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    contact_method TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
+
+// Add recovery_phrase column to existing tables if it doesn't exist
+try {
+  db.exec('ALTER TABLE users ADD COLUMN recovery_phrase TEXT');
+} catch (e) {
+  // Column already exists
+}
+try {
+  db.exec('ALTER TABLE users ADD COLUMN email TEXT');
+} catch (e) {
+  // Column already exists
+}
+try {
+  db.exec('ALTER TABLE users ADD COLUMN phone TEXT');
+} catch (e) {
+  // Column already exists
+}
 
 export { db };

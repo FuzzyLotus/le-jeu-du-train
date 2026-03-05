@@ -50,13 +50,20 @@ export function LoginScreen() {
             onChange={(e) => setUsername(e.target.value)}
             className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
           />
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-          />
+          <div className="relative">
+            <input
+              type="password"
+              placeholder="Mot de passe"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            />
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <Link to="/reset-password" className="text-xs text-primary hover:underline">
+                Oublié?
+              </Link>
+            </div>
+          </div>
           
           <Button 
             type="submit" 
@@ -73,6 +80,10 @@ export function LoginScreen() {
             Créer un compte
           </Link>
         </p>
+        
+        <Link to="/privacy" className="mt-6 text-xs text-white/30 hover:text-white/50 transition-colors">
+          Politique de Confidentialité
+        </Link>
       </div>
 
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 text-[10px] text-white/20 font-mono uppercase tracking-widest">

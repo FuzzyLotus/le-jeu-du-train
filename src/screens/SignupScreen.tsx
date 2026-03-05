@@ -10,6 +10,9 @@ export function SignupScreen() {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [recoveryPhrase, setRecoveryPhrase] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
@@ -27,7 +30,7 @@ export function SignupScreen() {
 
     setIsLoading(true);
     try {
-      const user = await AuthService.signup(username, displayName, password);
+      const user = await AuthService.signup(username, displayName, password, recoveryPhrase, email, phone);
       setCurrentUser(user);
       navigate('/');
     } catch (error: any) {
@@ -69,6 +72,42 @@ export function SignupScreen() {
             onChange={(e) => setPassword(e.target.value)}
             className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
           />
+
+          <div className="mt-4 p-5 bg-black/20 border border-white/5 rounded-2xl flex flex-col gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-white mb-1">Récupération de compte</h3>
+              <p className="text-xs text-white/50">Ajoute au moins une option pour pouvoir réinitialiser ton mot de passe en cas d'oubli.</p>
+            </div>
+            
+            <input
+              type="text"
+              placeholder="Phrase secrète (ex: mon chat est bleu)"
+              value={recoveryPhrase}
+              onChange={(e) => setRecoveryPhrase(e.target.value)}
+              className="w-full bg-surface border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            />
+            <input
+              type="email"
+              placeholder="Adresse email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-surface border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            />
+            <input
+              type="tel"
+              placeholder="Numéro de téléphone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-surface border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+            />
+          </div>
+          
+          <p className="text-xs text-white/50 text-center px-4 mt-2">
+            En t'inscrivant, tu acceptes notre{' '}
+            <Link to="/privacy" className="text-primary hover:underline">
+              Politique de Confidentialité
+            </Link>.
+          </p>
           
           <Button 
             type="submit" 
@@ -85,6 +124,10 @@ export function SignupScreen() {
             Se connecter
           </Link>
         </p>
+
+        <Link to="/privacy" className="mt-6 text-xs text-white/30 hover:text-white/50 transition-colors">
+          Politique de Confidentialité
+        </Link>
       </div>
     </div>
   );

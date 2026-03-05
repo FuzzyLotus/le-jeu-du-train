@@ -8,6 +8,8 @@ import { ToastContainer } from './components/ToastContainer';
 import { useAuthStore } from './store/useAuthStore';
 import { LoginScreen } from './screens/LoginScreen';
 import { SignupScreen } from './screens/SignupScreen';
+import { ResetPasswordScreen } from './screens/ResetPasswordScreen';
+import { PrivacyPolicyScreen } from './screens/PrivacyPolicyScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { TripPlannerScreen } from './screens/TripPlannerScreen';
 import { LeaderboardScreen } from './screens/LeaderboardScreen';
@@ -32,6 +34,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/signup" element={<SignupScreen />} />
+        <Route path="/reset-password" element={<ResetPasswordScreen />} />
+        <Route path="/privacy" element={<PrivacyPolicyScreen />} />
         <Route 
           path="/" 
           element={

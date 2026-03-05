@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { APP_VERSION, LAST_SYNC } from '../version';
-import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, Download, Upload, Edit, Ban, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, Download, Upload, Edit, Ban, RefreshCw, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, type SystemSetting } from '../db/database';
 import { useAuthStore } from '../store/useAuthStore';
@@ -12,6 +12,7 @@ import clsx from 'clsx';
 import type { FeedbackStatus, FeedbackReply, User, Trip } from '../types/models';
 import { ACHIEVEMENTS } from '../services/AchievementEngine';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { AuthService } from '../services/AuthService';
 
 export function AdminScreen() {
   const navigate = useNavigate();
@@ -20,11 +21,14 @@ export function AdminScreen() {
   
   const [userToDelete, setUserToDelete] = useState<{id: number, username: string} | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'moderation' | 'feedback' | 'console' | 'config'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'moderation' | 'feedback' | 'console' | 'config' | 'resets'>('analytics');
   const [replyText, setReplyText] = useState<{[key: number]: string}>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [nukeConfirm, setNukeConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [resetRequests, setResetRequests] = useState<any[]>([]);
+  const [resolvingRequest, setResolvingRequest] = useState<number | null>(null);
+  const [newPasswordForRequest, setNewPasswordForRequest] = useState('');
 
   // Config State
   const [config, setConfig] = useState({
@@ -50,6 +54,42 @@ export function AdminScreen() {
     };
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'resets') {
+      loadResetRequests();
+    }
+  }, [activeTab]);
+
+  const loadResetRequests = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const requests = await AuthService.getResetRequests(currentUser.id);
+      setResetRequests(requests);
+    } catch (e) {
+      console.error(e);
+      addToast({ title: 'Erreur', message: 'Impossible de charger les demandes de réinitialisation', type: 'error' });
+    }
+  };
+
+  const handleResolveReset = async (requestId: number) => {
+    if (!currentUser?.id) return;
+    if (!newPasswordForRequest || newPasswordForRequest.length < 8) {
+      addToast({ title: 'Erreur', message: 'Le mot de passe doit contenir au moins 8 caractères', type: 'error' });
+      return;
+    }
+    
+    try {
+      await AuthService.resolveResetRequest(currentUser.id, requestId, newPasswordForRequest);
+      addToast({ title: 'Succès', message: 'Mot de passe réinitialisé', type: 'success' });
+      setResolvingRequest(null);
+      setNewPasswordForRequest('');
+      loadResetRequests();
+    } catch (e: any) {
+      console.error(e);
+      addToast({ title: 'Erreur', message: e.message || 'Échec de la réinitialisation', type: 'error' });
+    }
+  };
 
   const handleSaveConfig = async () => {
     try {
@@ -489,7 +529,7 @@ export function AdminScreen() {
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 gap-2 mb-6 bg-surface border border-white/5 p-2 rounded-2xl">
+      <div className="grid grid-cols-4 gap-2 mb-6 bg-surface border border-white/5 p-2 rounded-2xl">
         <button
           onClick={() => setActiveTab('analytics')}
           className={clsx(
@@ -519,6 +559,16 @@ export function AdminScreen() {
         >
           <Shield className="w-5 h-5" />
           Mod
+        </button>
+        <button
+          onClick={() => setActiveTab('resets')}
+          className={clsx(
+            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
+            activeTab === 'resets' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
+          )}
+        >
+          <KeyRound className="w-5 h-5" />
+          Resets
         </button>
         <button
           onClick={() => setActiveTab('feedback')}
@@ -702,6 +752,84 @@ export function AdminScreen() {
             {trips?.length === 0 && (
               <div className="text-center text-white/50 py-8">
                 Aucun trajet récent.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'resets' && (
+        <div className="bg-surface border border-white/5 rounded-3xl p-6 mb-6">
+          <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-primary" />
+            Demandes de Réinitialisation
+          </h2>
+          <p className="text-sm text-white/50 mb-6">
+            Gérez les demandes de réinitialisation de mot de passe.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {resetRequests.map((request) => (
+              <div key={request.id} className="flex flex-col bg-black/20 rounded-2xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-white text-sm">
+                      @{request.username}
+                    </span>
+                    <span className="text-xs text-white/50">
+                      Demandé le {new Date(request.created_at).toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                  <span className={clsx(
+                    "text-[10px] px-2 py-1 rounded-full uppercase tracking-wider font-bold",
+                    request.status === 'pending' ? "bg-yellow-500/20 text-yellow-500" : "bg-green-500/20 text-green-500"
+                  )}>
+                    {request.status === 'pending' ? 'En attente' : 'Résolu'}
+                  </span>
+                </div>
+                
+                <div className="bg-white/5 rounded-xl p-3 mb-3">
+                  <p className="text-xs text-white/70 mb-1"><span className="font-bold">Méthode fournie :</span> {request.contact_method}</p>
+                  <p className="text-xs text-white/70 mb-1"><span className="font-bold">Email enregistré :</span> {request.email || 'Aucun'}</p>
+                  <p className="text-xs text-white/70"><span className="font-bold">Téléphone enregistré :</span> {request.phone || 'Aucun'}</p>
+                </div>
+
+                {request.status === 'pending' && (
+                  <>
+                    {resolvingRequest === request.id ? (
+                      <div className="flex flex-col gap-2 mt-2">
+                        <input
+                          type="password"
+                          placeholder="Nouveau mot de passe"
+                          value={newPasswordForRequest}
+                          onChange={(e) => setNewPasswordForRequest(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
+                        />
+                        <div className="flex gap-2">
+                          <Button variant="secondary" className="flex-1 text-xs py-2" onClick={() => {
+                            setResolvingRequest(null);
+                            setNewPasswordForRequest('');
+                          }}>
+                            Annuler
+                          </Button>
+                          <Button className="flex-1 text-xs py-2" onClick={() => handleResolveReset(request.id)}>
+                            Confirmer
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button variant="secondary" className="w-full text-xs py-2 mt-2" onClick={() => setResolvingRequest(request.id)}>
+                        Réinitialiser le mot de passe
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
+
+            {resetRequests.length === 0 && (
+              <div className="text-center text-white/50 py-8">
+                Aucune demande en attente.
               </div>
             )}
           </div>
