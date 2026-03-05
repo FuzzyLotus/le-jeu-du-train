@@ -42,4 +42,4 @@ For detailed deployment instructions, see [DEPLOY.md](./DEPLOY.md).
 
 ## License
 
-GNU 3
+GPL 3
