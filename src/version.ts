@@ -1,2 +1,2 @@
-export const APP_VERSION = '1.0.0';
-export const LAST_SYNC = '2026-03-05T10:05:47-08:00';
+export const APP_VERSION = '1.1.0';
+export const LAST_SYNC = '2026-03-08T14:44:57-07:00';

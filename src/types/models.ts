@@ -27,10 +27,12 @@ export interface User {
   longestTripKm: number;
   totalDistanceKm: number;
   maxCrossingsInTrip: number;
+  highestScore?: number;
   createdAt: number;
   isAdmin?: boolean;
   homeLocation?: GeocodeResult;
   preferences?: UserPreferences;
+  achievements?: string[];
 }
 
 export interface Trip {
@@ -41,6 +43,15 @@ export interface Trip {
   crossingsCount: number;
   success: boolean;
   date: number;
+  hasBridge?: boolean;
+  hasTunnel?: boolean;
+  maxElevation?: number;
+  minElevation?: number;
+  maxBridgeLength?: number;
+  startCountry?: string;
+  endCountry?: string;
+  startIsland?: string;
+  endIsland?: string;
 }
 
 export interface Achievement {
@@ -51,7 +62,7 @@ export interface Achievement {
 }
 
 export type FeedbackType = 'bug' | 'feedback';
-export type FeedbackStatus = 'pending' | 'in_progress' | 'resolved' | 'rejected';
+export type FeedbackStatus = 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'completed' | 'closed';
 
 export interface FeedbackReply {
   senderId: number;
@@ -69,6 +80,8 @@ export interface Feedback {
   createdAt: number;
   updatedAt: number;
   replies?: FeedbackReply[];
+  githubIssueNumber?: number;
+  githubIssueUrl?: string;
 }
 
 export type FriendRequestStatus = 'pending' | 'accepted' | 'rejected';

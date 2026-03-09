@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Map, Trophy, Medal, History, CarFront, Zap, Minus, Plus, ShieldAlert, MessageSquare, Settings, Users, AlertTriangle, Info, AlertOctagon } from 'lucide-react';
+import { LogOut, Map, BarChart3, Trophy, History, CarFront, Zap, Minus, Plus, ShieldAlert, MessageSquare, Settings, Users, AlertTriangle, Info, AlertOctagon, Menu, Navigation, Activity } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
@@ -10,9 +10,11 @@ import { AchievementEngine } from '../services/AchievementEngine';
 import { GameService } from '../services/GameService';
 import { ScoreCard } from '../components/ScoreCard';
 import { Button } from '../components/Button';
+import { TripPlanner } from '../components/TripPlanner';
+import { LiveTracker } from '../components/LiveTracker';
 import clsx from 'clsx';
 
-type ActiveOption = 'none' | 'free' | 'quick';
+type ActiveOption = 'none' | 'free' | 'quick' | 'gps' | 'live';
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -21,8 +23,11 @@ export function HomeScreen() {
   
   const [activeOption, setActiveOption] = useState<ActiveOption>('none');
   const [freeCrossings, setFreeCrossings] = useState(1);
+  const [freeTrips, setFreeTrips] = useState(1);
   const [announcement, setAnnouncement] = useState<{message: string, type: 'info'|'warning'|'alert'} | null>(null);
   const [globalMultiplier, setGlobalMultiplier] = useState(1);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -62,17 +67,17 @@ export function HomeScreen() {
   const handleQuickAdd = async (success: boolean) => {
     if (!currentUser.id) return;
     
-    try {
-      const points = success ? (1 * globalMultiplier) : 0;
-      const updatedUser = await GameService.submitScore(points, 0, 1);
-      
-      if (success) {
-        triggerConfetti();
-        addToast({ title: `+${points} point(s)! 🎉`, type: 'success' });
-      } else {
-        addToast({ title: 'Points remis à zéro! 💥', type: 'error' });
-      }
+    // Trigger feedback immediately
+    if (success) {
+      triggerConfetti();
+      addToast({ title: `+${1 * globalMultiplier} point(s)! 🎉`, type: 'success' });
+    } else {
+      addToast({ title: 'Points remis à zéro! 💥', type: 'error' });
+    }
 
+    try {
+      const updatedUser = await GameService.submitScore(0, 1, !success, 1);
+      
       setCurrentUser(updatedUser);
       await AchievementEngine.check(updatedUser);
       setActiveOption('none');
@@ -82,23 +87,24 @@ export function HomeScreen() {
   };
 
   const handleFreeTrip = async (success: boolean) => {
-    if (!currentUser.id || freeCrossings <= 0) return;
+    if (!currentUser.id || freeCrossings <= 0 || freeTrips <= 0) return;
     
-    try {
-      const points = success ? (freeCrossings * globalMultiplier) : 0;
-      const updatedUser = await GameService.submitScore(points, 0, freeCrossings);
+    // Trigger feedback immediately
+    if (success) {
+      triggerConfetti();
+      addToast({ title: `Trajet libre: +${freeCrossings * globalMultiplier} points 🎉`, type: 'success' });
+    } else {
+      addToast({ title: 'Points remis à zéro! 💥', type: 'error' });
+    }
 
-      if (success) {
-        triggerConfetti();
-        addToast({ title: `Trajet libre: +${points} points 🎉`, type: 'success' });
-      } else {
-        addToast({ title: 'Points remis à zéro! 💥', type: 'error' });
-      }
+    try {
+      const updatedUser = await GameService.submitScore(0, freeCrossings, !success, freeTrips);
 
       setCurrentUser(updatedUser);
       await AchievementEngine.check(updatedUser);
       setActiveOption('none');
       setFreeCrossings(1);
+      setFreeTrips(1);
     } catch (error: any) {
       addToast({ title: 'Erreur', message: error.message, type: 'error' });
     }
@@ -152,216 +158,246 @@ export function HomeScreen() {
             <Users className="w-5 h-5" />
           </button>
           <button 
-            onClick={() => navigate('/feedback')}
+            onClick={() => setShowMenuModal(true)}
             className="w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5 transition-colors"
-            title="Aide & Retours"
+            title="Menu"
           >
-            <MessageSquare className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => navigate('/settings')}
-            className="w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5 transition-colors"
-            title="Paramètres"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={handleLogout}
-            className="w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5 transition-colors"
-            title="Déconnexion"
-          >
-            <LogOut className="w-5 h-5" />
+            <Menu className="w-5 h-5" />
           </button>
         </div>
       </header>
 
       {/* Main Score */}
-      <ScoreCard points={currentUser.points} className="mb-8" />
+      <ScoreCard points={currentUser.points} highestScore={currentUser.highestScore} className="mb-8" />
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
-        <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center">
-          <span className="text-2xl font-display text-white">{currentUser.totalEarned}</span>
-          <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold mt-1 text-center">Total Gagné</span>
+      {/* Zone 1: Live Trip */}
+      <button 
+        onClick={() => setActiveOption('live')}
+        className="w-full bg-primary text-black font-bold text-xl py-8 rounded-3xl mb-4 shadow-[0_0_40px_rgba(255,193,7,0.3)] hover:scale-[1.02] transition-transform active:scale-95 flex flex-col items-center justify-center gap-2 relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
+        <div className="flex items-center gap-3">
+          <Activity className="w-7 h-7" />
+          <span>DÉMARRER LE TRAJET</span>
         </div>
-        <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center">
-          <span className="text-2xl font-display text-white">{currentUser.tripCount}</span>
-          <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold mt-1 text-center">Trajets</span>
-        </div>
-        <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center">
-          <span className="text-2xl font-display text-white">{currentUser.streak}</span>
-          <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold mt-1 text-center">Série 🔥</span>
-        </div>
-      </div>
+        <span className="text-black/60 text-xs font-medium normal-case">Conduis, on compte en arrière-plan.</span>
+      </button>
 
-      {/* 3 Distinct Options */}
-      <div className="flex flex-col gap-3 mb-8">
+      {/* Zone 2: Plan a Route */}
+      <button 
+        onClick={() => setActiveOption('gps')} 
+        className="w-full bg-surface border border-white/10 rounded-2xl p-5 flex items-center gap-4 hover:bg-white/5 transition-all active:scale-[0.98] text-left mb-8 group"
+      >
+        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+          <Map className="w-6 h-6 text-blue-400" />
+        </div>
+        <div>
+          <h3 className="font-bold text-white text-lg">Calculer un itinéraire</h3>
+          <p className="text-xs text-white/50 mt-0.5 leading-relaxed">Estimer les passages avant de partir, ou retrouver ceux d'un trajet déjà effectué.</p>
+        </div>
+      </button>
+
+      {/* Zone 3: Recovery Actions */}
+      <div className="mb-8">
+        <button 
+          onClick={() => setActiveOption(a => a === 'free' ? 'none' : 'free')}
+          className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-sm font-medium text-white/70"
+        >
+          <span>Oublié de lancer l'app ? Ajouter manuellement</span>
+          <CarFront className="w-4 h-4" />
+        </button>
         
-        {/* Option 1: Planned Trip */}
-        <button 
-          onClick={() => navigate('/planner')} 
-          className="bg-surface border border-white/10 rounded-2xl p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none"></div>
-          <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-            <Map className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-bold text-white text-lg">Trajet Planifié</h3>
-            <p className="text-xs text-white/50 mt-0.5">Calcul d'itinéraire automatique</p>
-          </div>
-        </button>
-
-        {/* Option 2: Free Trip */}
-        <div className={clsx(
-          "bg-surface border rounded-2xl overflow-hidden transition-colors",
-          activeOption === 'free' ? "border-blue-500/50 bg-blue-500/5" : "border-white/10"
-        )}>
-          <button 
-            onClick={() => setActiveOption(a => a === 'free' ? 'none' : 'free')} 
-            className="w-full p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
-          >
-            <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-              <CarFront className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h3 className="font-bold text-white text-lg">Trajet Libre</h3>
-              <p className="text-xs text-white/50 mt-0.5">Saisis tes passages après coup</p>
-            </div>
-          </button>
-          
-          <AnimatePresence>
-            {activeOption === 'free' && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <div className="p-4 pt-0 border-t border-white/5 mt-2">
-                  <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-4">
-                    <span className="text-sm text-white/70">Nombre de passages :</span>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => setFreeCrossings(Math.max(1, freeCrossings - 1))}
-                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 shrink-0"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      
-                      <input 
-                        type="number" 
-                        min="1"
-                        max="999"
-                        value={freeCrossings || ''}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val > 0) {
-                            setFreeCrossings(val);
-                          } else if (e.target.value === '') {
-                            setFreeCrossings(0); // Temporary state for empty input
-                          }
-                        }}
-                        onBlur={() => {
-                          if (freeCrossings < 1) setFreeCrossings(1);
-                        }}
-                        className="w-16 bg-transparent text-center font-display text-xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md"
-                      />
-
-                      <button 
-                        onClick={() => setFreeCrossings(freeCrossings + 1)}
-                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 shrink-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
+        <AnimatePresence>
+          {activeOption === 'free' && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 bg-surface border border-white/10 rounded-2xl mt-2">
+                <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-4">
+                  <span className="text-sm text-white/70 font-medium">Nombre de passages</span>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setFreeCrossings(Math.max(1, freeCrossings - 1))} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Minus className="w-5 h-5" /></button>
+                    <input type="number" min="1" max="999" value={freeCrossings || ''} onChange={(e) => setFreeCrossings(parseInt(e.target.value) || 0)} onBlur={() => freeCrossings < 1 && setFreeCrossings(1)} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
+                    <button onClick={() => setFreeCrossings(freeCrossings + 1)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Plus className="w-5 h-5" /></button>
                   </div>
-                  
-                  <p className="text-center text-sm mb-4">As-tu levé les jambes à <strong>tous</strong> les passages ?</p>
-                  <div className="flex gap-3 mb-3">
-                    <Button variant="danger" fullWidth onClick={() => handleFreeTrip(false)}>😬 Non</Button>
-                    <Button className="bg-success/20 text-success border border-success/30 hover:bg-success/30 shadow-none" fullWidth onClick={() => handleFreeTrip(true)}>🦵 Oui!</Button>
-                  </div>
-                  <button 
-                    onClick={() => setActiveOption('none')}
-                    className="w-full text-center text-xs text-white/40 hover:text-white/70 py-2 uppercase tracking-wider font-bold"
-                  >
-                    Annuler
-                  </button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Option 3: Quick Add */}
-        <div className={clsx(
-          "bg-surface border rounded-2xl overflow-hidden transition-colors",
-          activeOption === 'quick' ? "border-purple-500/50 bg-purple-500/5" : "border-white/10"
-        )}>
-          <button 
-            onClick={() => setActiveOption(a => a === 'quick' ? 'none' : 'quick')} 
-            className="w-full p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left"
-          >
-            <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
-              <Zap className="w-6 h-6 text-purple-400" />
-            </div>
-            <div>
-              <h3 className="font-bold text-white text-lg">Passage Rapide</h3>
-              <p className="text-xs text-white/50 mt-0.5">Ajout manuel instantané (+1)</p>
-            </div>
-          </button>
-
-          <AnimatePresence>
-            {activeOption === 'quick' && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <div className="p-4 pt-0 border-t border-white/5 mt-2">
-                  <p className="text-center text-sm mb-4 mt-2">Viens-tu de lever les jambes ?</p>
-                  <div className="flex gap-3 mb-3">
-                    <Button variant="danger" fullWidth onClick={() => handleQuickAdd(false)}>😬 Non</Button>
-                    <Button className="bg-success/20 text-success border border-success/30 hover:bg-success/30 shadow-none" fullWidth onClick={() => handleQuickAdd(true)}>🦵 Oui!</Button>
+                <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-4">
+                  <span className="text-sm text-white/70 font-medium">Sur combien de trajets ?</span>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => setFreeTrips(Math.max(1, freeTrips - 1))} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Minus className="w-5 h-5" /></button>
+                    <input type="number" min="1" max="99" value={freeTrips || ''} onChange={(e) => setFreeTrips(parseInt(e.target.value) || 0)} onBlur={() => freeTrips < 1 && setFreeTrips(1)} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
+                    <button onClick={() => setFreeTrips(freeTrips + 1)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Plus className="w-5 h-5" /></button>
                   </div>
-                  <button 
-                    onClick={() => setActiveOption('none')}
-                    className="w-full text-center text-xs text-white/40 hover:text-white/70 py-2 uppercase tracking-wider font-bold"
-                  >
-                    Annuler
-                  </button>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
+                <p className="text-center text-sm mb-4 text-white/60">As-tu levé les jambes à <strong>tous</strong> les passages ?</p>
+                <div className="flex gap-3 mb-3">
+                  <Button variant="danger" fullWidth onClick={() => handleFreeTrip(false)} className="h-12">😬 Non</Button>
+                  <Button variant="primary" fullWidth onClick={() => handleFreeTrip(true)} className="h-12">🦵 Oui!</Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Navigation Buttons */}
-      <div className="grid grid-cols-3 gap-3 mt-auto">
-        <button 
-          onClick={() => navigate('/leaderboard')}
-          className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-surface border border-white/5 text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <Trophy className="w-6 h-6" />
-          <span className="text-xs font-bold uppercase tracking-wider">Classement</span>
-        </button>
-        <button 
-          onClick={() => navigate('/achievements')}
-          className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-surface border border-white/5 text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <Medal className="w-6 h-6" />
-          <span className="text-xs font-bold uppercase tracking-wider">Succès</span>
-        </button>
-        <button 
-          onClick={() => navigate('/history')}
-          className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-surface border border-white/5 text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-        >
-          <History className="w-6 h-6" />
-          <span className="text-xs font-bold uppercase tracking-wider">Historique</span>
-        </button>
-      </div>
+      {/* Rules Modal */}
+      <AnimatePresence>
+        {showRulesModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl"
+            >
+              <h2 className="text-2xl font-display text-white mb-4">Règles du Jeu</h2>
+              
+              <div className="space-y-4 text-sm text-white/70 mb-6">
+                <p>
+                  <strong className="text-white">Le but est simple :</strong> Lève les jambes quand tu passes sur une voie ferrée ! Si tu oublies, tu perds tous tes points.
+                </p>
+                
+                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
+                  <h3 className="font-bold text-primary mb-1 flex items-center gap-2">
+                    <Map className="w-4 h-4" /> Trajet Planifié (GPS)
+                  </h3>
+                  <p className="text-xs">
+                    Calcule automatiquement tes passages. <strong>Seuls ces trajets</strong> comptent pour les records de distance et de "passages maximum en un seul trajet".
+                  </p>
+                </div>
+
+                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
+                  <h3 className="font-bold text-blue-400 mb-1 flex items-center gap-2">
+                    <CarFront className="w-4 h-4" /> Trajet Libre / Rapide
+                  </h3>
+                  <p className="text-xs">
+                    Ajoute manuellement tes passages si tu n'as pas utilisé le GPS. 
+                    <br/><br/>
+                    <span className="text-blue-400">💡 Astuce :</span> Si tu ajoutes plusieurs passages d'un coup, précise le nombre de trajets effectués. Le jeu calculera une moyenne pour tes records de passages !
+                  </p>
+                </div>
+              </div>
+
+              <Button fullWidth onClick={() => setShowRulesModal(false)}>
+                J'ai compris
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Menu Modal */}
+      <AnimatePresence>
+        {showMenuModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setShowMenuModal(false)}
+          >
+            <motion.div 
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-3"
+            >
+              <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto mb-2 sm:hidden"></div>
+              <h2 className="text-xl font-display text-white mb-2">Menu</h2>
+              
+              <button 
+                onClick={() => { setShowMenuModal(false); navigate('/leaderboard'); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <BarChart3 className="w-5 h-5 text-yellow-500" />
+                <span className="font-bold text-white">Classement</span>
+              </button>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); navigate('/achievements'); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <Trophy className="w-5 h-5 text-purple-500" />
+                <span className="font-bold text-white">Succès</span>
+              </button>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); navigate('/history'); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <History className="w-5 h-5 text-blue-500" />
+                <span className="font-bold text-white">Historique</span>
+              </button>
+
+              <div className="w-full h-px bg-white/10 my-1"></div>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); navigate('/settings'); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <Settings className="w-5 h-5 text-white/70" />
+                <span className="font-bold text-white">Paramètres</span>
+              </button>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); setShowRulesModal(true); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <Info className="w-5 h-5 text-blue-400" />
+                <span className="font-bold text-white">Règles du jeu</span>
+              </button>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); navigate('/feedback'); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-left"
+              >
+                <MessageSquare className="w-5 h-5 text-purple-400" />
+                <span className="font-bold text-white">Aide & Retours</span>
+              </button>
+
+              <button 
+                onClick={() => { setShowMenuModal(false); handleLogout(); }}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl bg-failure/10 hover:bg-failure/20 transition-colors text-left mt-2 border border-failure/20"
+              >
+                <LogOut className="w-5 h-5 text-failure" />
+                <span className="font-bold text-failure">Déconnexion</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* GPS Trip Modal (Overlay) */}
+      <AnimatePresence>
+        {activeOption === 'gps' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            className="fixed inset-0 z-[100] bg-black flex flex-col"
+          >
+            <TripPlanner onClose={() => setActiveOption('none')} />
+          </motion.div>
+        )}
+        {activeOption === 'live' && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            className="fixed inset-0 z-[100] bg-black flex flex-col"
+          >
+            <LiveTracker onClose={() => setActiveOption('none')} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

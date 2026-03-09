@@ -21,7 +21,8 @@ export function AdminScreen() {
   
   const [userToDelete, setUserToDelete] = useState<{id: number, username: string} | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'moderation' | 'feedback' | 'console' | 'config' | 'resets'>('analytics');
+  const [activeTab, setActiveTab] = useState<'monitoring' | 'users' | 'feedback' | 'system'>('monitoring');
+  const [activeSubTab, setActiveSubTab] = useState<string>('');
   const [replyText, setReplyText] = useState<{[key: number]: string}>({});
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [nukeConfirm, setNukeConfirm] = useState(false);
@@ -29,6 +30,7 @@ export function AdminScreen() {
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [resolvingRequest, setResolvingRequest] = useState<number | null>(null);
   const [newPasswordForRequest, setNewPasswordForRequest] = useState('');
+  const [userSearch, setUserSearch] = useState('');
 
   // Config State
   const [config, setConfig] = useState({
@@ -36,7 +38,8 @@ export function AdminScreen() {
     allowSignups: true,
     globalMultiplier: 1,
     announcement: '',
-    announcementType: 'info' as 'info' | 'warning' | 'alert'
+    announcementType: 'info' as 'info' | 'warning' | 'alert',
+    enableSimulator: false
   });
 
   // Load settings
@@ -56,10 +59,19 @@ export function AdminScreen() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'resets') {
+    if (activeTab === 'monitoring') setActiveSubTab('analytics');
+    if (activeTab === 'users') {
+      setActiveSubTab('list');
       loadResetRequests();
     }
+    if (activeTab === 'system') setActiveSubTab('config');
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeSubTab === 'resets') {
+      loadResetRequests();
+    }
+  }, [activeSubTab]);
 
   const loadResetRequests = async () => {
     if (!currentUser?.id) return;
@@ -99,6 +111,7 @@ export function AdminScreen() {
         await db.settings.put({ key: 'globalMultiplier', value: Number(config.globalMultiplier) });
         await db.settings.put({ key: 'announcement', value: config.announcement });
         await db.settings.put({ key: 'announcementType', value: config.announcementType });
+        await db.settings.put({ key: 'enableSimulator', value: config.enableSimulator });
       });
       addToast({ title: 'Sauvegardé', message: 'Configuration mise à jour.', type: 'success' });
     } catch (e) {
@@ -123,7 +136,7 @@ export function AdminScreen() {
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
-    if (activeTab === 'users' || activeTab === 'analytics') {
+    if (activeTab === 'users' || activeTab === 'monitoring') {
       loadUsers();
     }
   }, [activeTab]);
@@ -317,58 +330,17 @@ export function AdminScreen() {
 
   const handleGenerateDummyUsers = async () => {
     try {
-      const dummyUsers: User[] = [
-        {
-          username: 'alice_w',
-          displayName: 'Alice Wonderland',
-          passwordHash: 'dummy',
-          points: 150,
-          totalEarned: 150,
-          tripCount: 12,
-          streak: 5,
-          hasLost: false,
-          longestTripKm: 45.2,
-          totalDistanceKm: 320.5,
-          maxCrossingsInTrip: 3,
-          createdAt: Date.now(),
-          preferences: {
-            isPublicProfile: true,
-            showTripsOnLeaderboard: true,
-            allowFriendRequests: true,
-            showStats: true,
-            showTripHistory: true
-          }
-        },
-        {
-          username: 'bob_builder',
-          displayName: 'Bob The Builder',
-          passwordHash: 'dummy',
-          points: 85,
-          totalEarned: 90,
-          tripCount: 8,
-          streak: 2,
-          hasLost: true,
-          longestTripKm: 12.5,
-          totalDistanceKm: 85.0,
-          maxCrossingsInTrip: 2,
-          createdAt: Date.now(),
-          preferences: {
-            isPublicProfile: true,
-            showTripsOnLeaderboard: true,
-            allowFriendRequests: true,
-            showStats: true,
-            showTripHistory: false // Private history
-          }
-        }
-      ];
-
-      for (const user of dummyUsers) {
-        const existing = await db.users.where('username').equals(user.username).first();
-        if (!existing) {
-          await db.users.add(user);
-        }
+      const response = await fetch('/api/admin/dummy-users', {
+        method: 'POST',
+        headers: AuthService.getAuthHeaders()
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate dummy users');
       }
+
       addToast({ title: 'Succès', message: 'Alice & Bob créés', type: 'success' });
+      loadUsers();
     } catch (error) {
       console.error(error);
       addToast({ title: 'Erreur', message: 'Échec création dummy users', type: 'error' });
@@ -377,39 +349,22 @@ export function AdminScreen() {
 
   const handleBotAction = async (action: 'send_request' | 'accept_request', botName: string) => {
     if (!currentUser?.id) return;
-    const bot = await db.users.where('username').equals(botName).first();
-    if (!bot || !bot.id) {
-      addToast({ title: 'Erreur', message: `${botName} introuvable. Générez les d'abord.`, type: 'error' });
-      return;
-    }
 
     try {
-      if (action === 'send_request') {
-        // Bot sends request to current user
-        const existing = await db.friendRequests.where('[senderId+receiverId]').equals([bot.id, currentUser.id]).first();
-        if (existing) {
-          addToast({ title: 'Info', message: 'Demande déjà existante', type: 'info' });
-          return;
-        }
-        await db.friendRequests.add({
-          senderId: bot.id,
-          receiverId: currentUser.id,
-          status: 'pending',
-          createdAt: Date.now()
-        });
-        addToast({ title: 'Succès', message: `${bot.displayName} vous a envoyé une demande!`, type: 'success' });
-      } else if (action === 'accept_request') {
-        // Bot accepts request from current user
-        const request = await db.friendRequests.where('[senderId+receiverId]').equals([currentUser.id, bot.id]).first();
-        if (!request) {
-          addToast({ title: 'Erreur', message: `Aucune demande de votre part vers ${bot.displayName}`, type: 'error' });
-          return;
-        }
-        if (request.id) {
-            await db.friendRequests.update(request.id, { status: 'accepted' });
-            addToast({ title: 'Succès', message: `${bot.displayName} a accepté votre demande!`, type: 'success' });
-        }
+      const response = await fetch('/api/admin/bot-action', {
+        method: 'POST',
+        headers: AuthService.getAuthHeaders(),
+        body: JSON.stringify({ action, botName })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        addToast({ title: 'Erreur', message: data.error || 'Action échouée', type: 'error' });
+        return;
       }
+
+      addToast({ title: 'Succès', message: data.message, type: 'success' });
     } catch (e) {
       console.error(e);
       addToast({ title: 'Erreur', message: 'Action échouée', type: 'error' });
@@ -419,39 +374,17 @@ export function AdminScreen() {
   const handleGenerateTrips = async () => {
     if (!currentUser?.id) return;
     try {
-      const trips: Trip[] = [];
-      let totalPoints = 0;
-      let totalKm = 0;
+      const response = await fetch('/api/admin/generate-trips', {
+        method: 'POST',
+        headers: AuthService.getAuthHeaders()
+      });
 
-      for (let i = 0; i < 10; i++) {
-        const distance = Math.floor(Math.random() * 50) + 5;
-        const crossings = Math.floor(Math.random() * 5) + 1;
-        const points = crossings; // Assuming success
-        
-        trips.push({
-          userId: currentUser.id,
-          routeName: `Trajet Simulé #${i+1}`,
-          distanceKm: distance,
-          crossingsCount: crossings,
-          success: true,
-          date: Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000) // Random time in last 30 days
-        });
-
-        totalPoints += points;
-        totalKm += distance;
+      if (!response.ok) {
+        throw new Error('Failed to generate trips');
       }
 
-      await db.trips.bulkAdd(trips);
-
-      // Update user stats
-      const updatedUser = { ...currentUser };
-      updatedUser.points += totalPoints;
-      updatedUser.totalEarned += totalPoints;
-      updatedUser.tripCount += 10;
-      updatedUser.totalDistanceKm = (updatedUser.totalDistanceKm || 0) + totalKm;
-      
-      await db.users.update(currentUser.id, updatedUser);
-      setCurrentUser(updatedUser);
+      const data = await response.json();
+      setCurrentUser(data.user);
       
       addToast({ title: 'Succès', message: '10 trajets générés!', type: 'success' });
     } catch (e) {
@@ -546,78 +479,100 @@ export function AdminScreen() {
       {/* Tabs */}
       <div className="grid grid-cols-4 gap-2 mb-6 bg-surface border border-white/5 p-2 rounded-2xl">
         <button
-          onClick={() => setActiveTab('analytics')}
+          onClick={() => setActiveTab('monitoring')}
           className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
-            activeTab === 'analytics' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
+            "flex flex-col items-center justify-center py-4 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5 min-h-[72px]",
+            activeTab === 'monitoring' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
           )}
         >
-          <BarChart3 className="w-5 h-5" />
-          Stats
+          <BarChart3 className="w-6 h-6" />
+          Suivi
         </button>
         <button
           onClick={() => setActiveTab('users')}
           className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
+            "flex flex-col items-center justify-center py-4 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5 min-h-[72px]",
             activeTab === 'users' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
           )}
         >
-          <Users className="w-5 h-5" />
+          <Users className="w-6 h-6" />
           Users
-        </button>
-        <button
-          onClick={() => setActiveTab('moderation')}
-          className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
-            activeTab === 'moderation' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
-          )}
-        >
-          <Shield className="w-5 h-5" />
-          Mod
-        </button>
-        <button
-          onClick={() => setActiveTab('resets')}
-          className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
-            activeTab === 'resets' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
-          )}
-        >
-          <KeyRound className="w-5 h-5" />
-          Resets
         </button>
         <button
           onClick={() => setActiveTab('feedback')}
           className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
+            "flex flex-col items-center justify-center py-4 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5 min-h-[72px]",
             activeTab === 'feedback' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
           )}
         >
-          <MessageSquare className="w-5 h-5" />
+          <MessageSquare className="w-6 h-6" />
           Avis
         </button>
         <button
-          onClick={() => setActiveTab('console')}
+          onClick={() => setActiveTab('system')}
           className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
-            activeTab === 'console' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
+            "flex flex-col items-center justify-center py-4 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5 min-h-[72px]",
+            activeTab === 'system' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
           )}
         >
-          <Terminal className="w-5 h-5" />
-          Dev
-        </button>
-        <button
-          onClick={() => setActiveTab('config')}
-          className={clsx(
-            "flex flex-col items-center justify-center py-3 px-2 rounded-xl text-[10px] font-bold transition-all uppercase tracking-wider gap-1.5",
-            activeTab === 'config' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white hover:bg-white/5"
-          )}
-        >
-          <SettingsIcon className="w-5 h-5" />
-          Cfg
+          <SettingsIcon className="w-6 h-6" />
+          Système
         </button>
       </div>
 
-      {activeTab === 'analytics' && (
+      {/* Sub-tabs */}
+      {activeTab === 'monitoring' && (
+        <div className="flex gap-2 mb-6">
+          <button 
+            onClick={() => setActiveSubTab('analytics')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'analytics' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Statistiques
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('moderation')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'moderation' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Modération
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'users' && (
+        <div className="flex gap-2 mb-6">
+          <button 
+            onClick={() => setActiveSubTab('list')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'list' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Liste
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('resets')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'resets' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Réinitialisations
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'system' && (
+        <div className="flex gap-2 mb-6">
+          <button 
+            onClick={() => setActiveSubTab('config')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'config' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Configuration
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('console')}
+            className={clsx("flex-1 py-4 rounded-xl text-xs font-bold uppercase tracking-wider border transition-all min-h-[56px]", activeSubTab === 'console' ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/5 text-white/40")}
+          >
+            Console Dev
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'monitoring' && activeSubTab === 'analytics' && (
         <div className="flex flex-col gap-6">
           {/* Key Metrics */}
           <div className="grid grid-cols-2 gap-3">
@@ -668,7 +623,7 @@ export function AdminScreen() {
         </div>
       )}
 
-      {activeTab === 'users' && (
+      {activeTab === 'users' && activeSubTab === 'list' && (
         <div className="bg-surface border border-white/5 rounded-3xl p-6 mb-6">
           <h2 className="font-bold text-lg mb-4">Gestion des utilisateurs</h2>
           <p className="text-sm text-white/50 mb-6">
@@ -676,31 +631,57 @@ export function AdminScreen() {
           </p>
 
           <div className="flex flex-col gap-3">
-            {users?.map((user) => (
-              <div key={user.id} className="flex items-center justify-between bg-black/20 rounded-2xl p-4 border border-white/5">
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Rechercher un utilisateur..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 pr-10 text-white placeholder-white/30 focus:outline-none focus:border-primary/50 transition-colors"
+              />
+              {userSearch && (
+                <button 
+                  onClick={() => setUserSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {users?.filter(u => 
+              u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
+              u.username.toLowerCase().includes(userSearch.toLowerCase())
+            ).map((user) => (
+              <div key={user.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-black/20 rounded-2xl p-4 border border-white/5 gap-4">
                 <div className="flex flex-col overflow-hidden">
-                  <span className="font-bold text-white truncate flex items-center gap-2">
+                  <span className="font-bold text-white truncate flex items-center gap-2 text-lg">
                     {user.displayName}
-                    {user.isAdmin && <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>}
+                    {user.isAdmin && <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Admin</span>}
                   </span>
-                  <span className="text-xs text-white/40 truncate">@{user.username} • {user.points} pts</span>
+                  <span className="text-sm text-white/40 truncate font-mono">@{user.username}</span>
+                  <div className="flex gap-3 mt-1 text-xs text-white/50">
+                    <span>🏆 {user.points} pts</span>
+                    <span>🔥 {user.streak} série</span>
+                    <span>🚗 {user.tripCount} trajets</span>
+                  </div>
                 </div>
                 
                 {user.id !== currentUser.id && (
-                  <div className="flex gap-2 ml-3 shrink-0">
+                  <div className="flex gap-2 shrink-0 self-end sm:self-center">
                     <button
                       onClick={() => setUserToEdit(user)}
-                      className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors"
-                      title="Éditer"
+                      className="h-10 px-4 rounded-xl bg-white/5 text-white border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider"
                     >
                       <Edit className="w-4 h-4" />
+                      Éditer
                     </button>
                     <button
                       onClick={() => user.id !== undefined && setUserToDelete({ id: user.id, username: user.username })}
-                      className="w-10 h-10 rounded-full bg-failure/10 text-failure flex items-center justify-center hover:bg-failure/20 transition-colors"
-                      title="Supprimer"
+                      className="h-10 px-4 rounded-xl bg-failure/10 text-failure border border-failure/20 flex items-center justify-center gap-2 hover:bg-failure/20 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider"
                     >
                       <Trash2 className="w-4 h-4" />
+                      Supprimer
                     </button>
                   </div>
                 )}
@@ -716,49 +697,49 @@ export function AdminScreen() {
         </div>
       )}
 
-      {activeTab === 'moderation' && (
+      {activeTab === 'monitoring' && activeSubTab === 'moderation' && (
         <div className="bg-surface border border-white/5 rounded-3xl p-6">
           <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-primary" />
-            Modération des Trajets
+            Modération
           </h2>
-          <p className="text-sm text-white/50 mb-6">
-            Les 100 derniers trajets. Surveillez les anomalies (vitesse, fréquence).
+          <p className="text-xs text-white/50 mb-6">
+            Les 100 derniers trajets. Surveillez les anomalies.
           </p>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {trips?.map(trip => {
               const user = users?.find(u => u.id === trip.userId);
               const isSuspicious = trip.distanceKm > 100 || trip.crossingsCount > 20;
 
               return (
                 <div key={trip.id} className={clsx(
-                  "p-4 rounded-2xl border flex items-center justify-between",
+                  "p-3 rounded-xl border flex items-center justify-between gap-3",
                   isSuspicious ? "bg-red-500/5 border-red-500/20" : "bg-black/20 border-white/5"
                 )}>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-white">{user?.displayName || 'Inconnu'}</span>
-                      <span className="text-xs text-white/40">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-xs text-white truncate">{user?.displayName || 'Inconnu'}</span>
+                      <span className="text-[10px] text-white/40">
                         {new Date(trip.date).toLocaleDateString()}
                       </span>
                       {isSuspicious && (
-                        <span className="bg-red-500/20 text-red-500 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" /> Suspicious
+                        <span className="bg-red-500/20 text-red-500 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" /> Suspect
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-white/60 mt-1">
-                      {trip.routeName} • {trip.distanceKm} km • {trip.crossingsCount} passages
+                    <div className="text-[10px] text-white/60 mt-0.5 truncate">
+                      {trip.distanceKm}km • {trip.crossingsCount} passages
                     </div>
                   </div>
 
                   <button
                     onClick={() => trip.id && handleDeleteTrip(trip.id)}
-                    className="w-8 h-8 rounded-full bg-white/5 text-white/40 hover:bg-failure/10 hover:text-failure flex items-center justify-center transition-colors"
-                    title="Supprimer le trajet"
+                    className="w-12 h-12 rounded-full bg-white/5 text-white/40 hover:bg-failure/10 hover:text-failure flex items-center justify-center transition-colors shrink-0 active:scale-95"
+                    title="Supprimer"
                   >
-                    <Ban className="w-4 h-4" />
+                    <Ban className="w-6 h-6" />
                   </button>
                 </div>
               );
@@ -773,7 +754,7 @@ export function AdminScreen() {
         </div>
       )}
 
-      {activeTab === 'resets' && (
+      {activeTab === 'users' && activeSubTab === 'resets' && (
         <div className="bg-surface border border-white/5 rounded-3xl p-6 mb-6">
           <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-primary" />
@@ -949,31 +930,31 @@ export function AdminScreen() {
               <div className="flex flex-wrap gap-2 pt-4 border-t border-white/5">
                 <button 
                   onClick={() => item.id && handleUpdateStatus(item.id, 'pending')}
-                  className={clsx("p-2 rounded-full hover:bg-white/10 transition-colors", item.status === 'pending' ? "text-yellow-500 bg-yellow-500/10" : "text-white/30")}
+                  className={clsx("w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-95", item.status === 'pending' ? "text-yellow-500 bg-yellow-500/10" : "text-white/30")}
                   title="En attente"
                 >
-                  <Clock className="w-4 h-4" />
+                  <Clock className="w-6 h-6" />
                 </button>
                 <button 
                   onClick={() => item.id && handleUpdateStatus(item.id, 'in_progress')}
-                  className={clsx("p-2 rounded-full hover:bg-white/10 transition-colors", item.status === 'in_progress' ? "text-blue-500 bg-blue-500/10" : "text-white/30")}
+                  className={clsx("w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-95", item.status === 'in_progress' ? "text-blue-500 bg-blue-500/10" : "text-white/30")}
                   title="En cours"
                 >
-                  <Loader2 className="w-4 h-4" />
+                  <Loader2 className="w-6 h-6" />
                 </button>
                 <button 
                   onClick={() => item.id && handleUpdateStatus(item.id, 'resolved')}
-                  className={clsx("p-2 rounded-full hover:bg-white/10 transition-colors", item.status === 'resolved' ? "text-green-500 bg-green-500/10" : "text-white/30")}
+                  className={clsx("w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-95", item.status === 'resolved' ? "text-green-500 bg-green-500/10" : "text-white/30")}
                   title="Résolu"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-6 h-6" />
                 </button>
                 <button 
                   onClick={() => item.id && handleUpdateStatus(item.id, 'rejected')}
-                  className={clsx("p-2 rounded-full hover:bg-white/10 transition-colors", item.status === 'rejected' ? "text-red-500 bg-red-500/10" : "text-white/30")}
+                  className={clsx("w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-95", item.status === 'rejected' ? "text-red-500 bg-red-500/10" : "text-white/30")}
                   title="Rejeté"
                 >
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="w-6 h-6" />
                 </button>
               </div>
             </div>
@@ -987,128 +968,160 @@ export function AdminScreen() {
         </div>
       )}
 
-      {activeTab === 'console' && (
-        <div className="flex flex-col gap-6">
+      {activeTab === 'system' && activeSubTab === 'console' && (
+        <div className="flex flex-col gap-4">
           
-          {/* User Switcher */}
-          <div className="bg-surface border border-white/5 rounded-3xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
-              Changer d'utilisateur
-            </h2>
-            <div className="grid grid-cols-1 gap-2">
-              {users?.map(u => (
-                <button
-                  key={u.id}
-                  onClick={() => handleSwitchUser(u)}
-                  disabled={u.id === currentUser.id}
-                  className={clsx(
-                    "flex items-center justify-between p-3 rounded-xl border transition-colors text-left",
-                    u.id === currentUser.id 
-                      ? "bg-primary/20 border-primary/50 text-primary cursor-default" 
-                      : "bg-white/5 border-white/5 text-white hover:bg-white/10"
-                  )}
-                >
-                  <span className="font-bold text-sm">{u.displayName}</span>
-                  {u.id === currentUser.id && <span className="text-[10px] uppercase font-bold">Actuel</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Bot Actions */}
-          <div className="bg-surface border border-white/5 rounded-3xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-blue-400" />
-              Actions Bot
-            </h2>
-            <div className="flex flex-col gap-3">
-              <Button onClick={handleGenerateDummyUsers} variant="secondary" className="mb-2">
-                Générer Alice & Bob
-              </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button onClick={() => handleBotAction('send_request', 'alice_w')} className="text-xs">
-                  Alice demande
-                </Button>
-                <Button onClick={() => handleBotAction('accept_request', 'alice_w')} className="text-xs">
-                  Alice accepte
-                </Button>
-                <Button onClick={() => handleBotAction('send_request', 'bob_builder')} className="text-xs">
-                  Bob demande
-                </Button>
-                <Button onClick={() => handleBotAction('accept_request', 'bob_builder')} className="text-xs">
-                  Bob accepte
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Trip Generator */}
-          <div className="bg-surface border border-white/5 rounded-3xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-400" />
-              Générateur de Trajets
-            </h2>
-            <p className="text-sm text-white/50 mb-4">Ajoute 10 trajets aléatoires à l'utilisateur actuel.</p>
-            <Button onClick={handleGenerateTrips} fullWidth>
-              Générer 10 Trajets
-            </Button>
-          </div>
-
-          {/* Achievement Unlocker */}
-          <div className="bg-surface border border-white/5 rounded-3xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-purple-400" />
-              Débloquer Succès
-            </h2>
-            <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-              {ACHIEVEMENTS.map(ach => {
-                const isUnlocked = myAchievements?.some(a => a.achievementId === ach.id);
-                return (
+          <div className="grid grid-cols-1 gap-4">
+            {/* User Switcher */}
+            <div className="bg-surface border border-white/5 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
+                <Users className="w-4 h-4" />
+                Changer d'identité
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {users?.map(u => (
                   <button
-                    key={ach.id}
-                    onClick={() => handleUnlockAchievement(ach.id, ach.title)}
-                    disabled={isUnlocked}
+                    key={u.id}
+                    onClick={() => handleSwitchUser(u)}
+                    disabled={u.id === currentUser.id}
                     className={clsx(
-                      "flex items-center justify-between p-3 rounded-xl border transition-colors text-left text-xs",
-                      isUnlocked 
-                        ? "bg-green-500/10 border-green-500/30 text-green-500 opacity-50" 
-                        : "bg-white/5 border-white/5 text-white hover:bg-white/10"
+                      "px-6 py-4 rounded-xl border text-xs font-bold transition-all min-h-[56px]",
+                      u.id === currentUser.id 
+                        ? "bg-primary/20 border-primary text-primary" 
+                        : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10"
                     )}
                   >
-                    <span className="font-bold truncate mr-2">{ach.title}</span>
-                    {isUnlocked ? <CheckCircle2 className="w-3 h-3 shrink-0" /> : <span className="text-[10px] opacity-50">Débloquer</span>}
+                    {u.displayName}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Nuke DB */}
-          <div className="bg-surface border border-failure/30 rounded-3xl p-6">
-            <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-failure">
-              <Database className="w-5 h-5" />
-              Zone de Danger
-            </h2>
-            {!nukeConfirm ? (
-              <Button variant="danger" fullWidth onClick={() => setNukeConfirm(true)}>
-                NUKE DATABASE (Reset)
-              </Button>
-            ) : (
-              <div className="space-y-2 animate-pulse">
-                <p className="text-failure font-bold text-center">ÊTES-VOUS SÛR ?</p>
-                <div className="flex gap-2">
-                  <Button variant="secondary" fullWidth onClick={() => setNukeConfirm(false)}>Annuler</Button>
-                  <Button variant="danger" fullWidth onClick={handleNukeDb}>OUI, TOUT EFFACER</Button>
+            {/* Experimental Features */}
+            <div className="bg-surface border border-white/5 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
+                <Terminal className="w-4 h-4" />
+                Fonctionnalités Dev
+              </h2>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="block text-sm font-bold">Simulateur GPS</span>
+                  <span className="text-xs text-white/50">Affiche le bouton "Simuler" en trajet</span>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const newVal = !config.enableSimulator;
+                    setConfig(prev => ({ ...prev, enableSimulator: newVal }));
+                    await db.settings.put({ key: 'enableSimulator', value: newVal });
+                    addToast({ title: 'Succès', message: 'Simulateur ' + (newVal ? 'activé' : 'désactivé'), type: 'success' });
+                  }}
+                  className={clsx(
+                    "w-12 h-6 rounded-full relative transition-colors",
+                    config.enableSimulator ? "bg-primary" : "bg-white/10"
+                  )}
+                >
+                  <motion.div 
+                    animate={{ x: config.enableSimulator ? 24 : 2 }}
+                    className="absolute top-1 left-0 w-4 h-4 rounded-full bg-white shadow-sm"
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-surface border border-white/5 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
+                <Zap className="w-4 h-4" />
+                Actions Rapides
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                <Button onClick={handleGenerateDummyUsers} variant="secondary" className="text-xs py-4 h-auto min-h-[56px]">
+                  Créer Alice & Bob
+                </Button>
+                <Button onClick={handleGenerateTrips} variant="secondary" className="text-xs py-4 h-auto min-h-[56px]">
+                  +10 Trajets (Moi)
+                </Button>
+              </div>
+            </div>
+
+            {/* Bot Control */}
+            <div className="bg-surface border border-white/5 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
+                <UserPlus className="w-4 h-4" />
+                Contrôle des Bots
+              </h2>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-white/50 font-bold">Alice</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleBotAction('send_request', 'alice_w')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Demander</button>
+                    <button onClick={() => handleBotAction('accept_request', 'alice_w')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Accepter</button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-white/50 font-bold">Bob</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleBotAction('send_request', 'bob_builder')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Demander</button>
+                    <button onClick={() => handleBotAction('accept_request', 'bob_builder')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Accepter</button>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
+
+            {/* Achievement Unlocker */}
+            <div className="bg-surface border border-white/5 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
+                <Trophy className="w-4 h-4" />
+                Déblocage Succès
+              </h2>
+              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1">
+                {ACHIEVEMENTS.map(ach => {
+                  const isUnlocked = myAchievements?.some(a => a.achievementId === ach.id);
+                  return (
+                    <button
+                      key={ach.id}
+                      onClick={() => handleUnlockAchievement(ach.id, ach.title)}
+                      disabled={isUnlocked}
+                      className={clsx(
+                        "flex items-center justify-between p-4 rounded-xl border transition-all text-left text-xs min-h-[56px]",
+                        isUnlocked 
+                          ? "bg-green-500/10 border-green-500/20 text-green-500 opacity-50" 
+                          : "bg-white/5 border-white/5 text-white/60 hover:bg-white/10"
+                      )}
+                    >
+                      <span className="font-bold truncate">{ach.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Nuke DB */}
+            <div className="bg-surface border border-failure/20 rounded-3xl p-5">
+              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-failure/70">
+                <Database className="w-4 h-4" />
+                Destruction
+              </h2>
+              {!nukeConfirm ? (
+                <button 
+                  onClick={() => setNukeConfirm(true)}
+                  className="w-full py-2 bg-failure/10 border border-failure/20 text-failure text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-failure/20 transition-all"
+                >
+                  Nuke Database
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => setNukeConfirm(false)} className="flex-1 py-2 bg-white/5 text-white text-[10px] font-bold uppercase rounded-xl">Non</button>
+                  <button onClick={handleNukeDb} className="flex-1 py-2 bg-failure text-white text-[10px] font-bold uppercase rounded-xl">Oui, Nuke</button>
+                </div>
+              )}
+            </div>
           </div>
 
         </div>
       )}
 
-      {activeTab === 'config' && (
+      {activeTab === 'system' && activeSubTab === 'config' && (
         <div className="flex flex-col gap-6">
           
           {/* Global Settings */}

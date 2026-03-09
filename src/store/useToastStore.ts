@@ -8,6 +8,7 @@ export interface ToastMessage {
   message?: string;
   type: ToastType;
   icon?: string; // Optional custom emoji/icon
+  timer?: ReturnType<typeof setTimeout>;
 }
 
 interface ToastStore {
@@ -20,12 +21,17 @@ export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   addToast: (toast) => {
     const id = Math.random().toString(36).substring(2, 9);
-    set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }));
     
     // Auto-remove after 4 seconds
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
     }, 4000);
+
+    set((state) => ({ toasts: [...state.toasts, { ...toast, id, timer }] }));
   },
-  removeToast: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  removeToast: (id) => set((state) => {
+    const toast = state.toasts.find(t => t.id === id);
+    if (toast?.timer) clearTimeout(toast.timer);
+    return { toasts: state.toasts.filter((t) => t.id !== id) };
+  }),
 }));

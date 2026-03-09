@@ -20,10 +20,13 @@ export interface RouteResult {
 export interface OverpassElement {
   type: string;
   id: number;
-  lat: number;
-  lon: number;
+  lat?: number;
+  lon?: number;
+  geometry?: { lat: number; lon: number }[];
   tags?: {
     railway?: string;
+    bridge?: string;
+    tunnel?: string;
   };
 }
 
@@ -31,9 +34,9 @@ export interface OverpassResult {
   elements: OverpassElement[];
 }
 
-const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
-const OSRM_URL = 'https://router.project-osrm.org';
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const NOMINATIM_URL = import.meta.env.VITE_NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
+const OSRM_URL = import.meta.env.VITE_OSRM_URL || 'https://router.project-osrm.org';
+const OVERPASS_URL = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 
 export const geoServices = {
   /**
@@ -63,9 +66,9 @@ export const geoServices = {
   /**
    * Reverse geocode coordinates to an address using Nominatim
    */
-  async reverseGeocode(lat: number, lon: number): Promise<GeocodeResult> {
+  async reverseGeocode(lat: number, lon: number): Promise<any> {
     const response = await fetch(
-      `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lon}`, {
+      `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`, {
         headers: {
           'Accept-Language': 'fr-CA,fr;q=0.9',
           'User-Agent': 'LeJeuDuTrainApp/1.0'
@@ -73,13 +76,7 @@ export const geoServices = {
       }
     );
     if (!response.ok) throw new Error('Reverse geocoding failed');
-    const data = await response.json();
-    return {
-      place_id: data.place_id || Date.now(),
-      lat: data.lat,
-      lon: data.lon,
-      display_name: data.display_name,
-    };
+    return await response.json();
   },
 
   /**
@@ -126,6 +123,65 @@ export const geoServices = {
         return this.getCrossingsInBBox(bbox, retries - 1);
       }
       throw new Error("Le serveur de cartes est surchargé. Réessaie dans quelques instants.");
+    }
+  },
+
+  /**
+   * Find all bridges and tunnels within a bounding box.
+   * BBox format: [south, west, north, east]
+   */
+  async getInfrastructureInBBox(bbox: [number, number, number, number]): Promise<OverpassResult> {
+    const [s, w, n, e] = bbox;
+    // Overpass QL to find bridge or tunnel
+    const query = `[out:json][timeout:60];(way["bridge"](${s},${w},${n},${e});way["tunnel"](${s},${w},${n},${e}););out geom;`;
+
+    try {
+      const response = await fetch(`${OVERPASS_URL}?data=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Overpass API failed');
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Overpass Infrastructure Error:", error);
+      return { elements: [] }; // Return empty if infrastructure query fails
+    }
+  },
+
+  /**
+   * Get elevation for a coordinate.
+   */
+  async getElevation(lat: number, lon: number): Promise<number> {
+    try {
+      const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lon}`);
+      if (!response.ok) throw new Error('Elevation API failed');
+      const data = await response.json();
+      return data.results[0].elevation;
+    } catch (error) {
+      console.error("Elevation Error:", error);
+      return 0; // Default to 0 if elevation fails
+    }
+  },
+
+  /**
+   * Get elevations for multiple coordinates in a single batch request.
+   */
+  async getElevationsBatch(coords: [number, number][]): Promise<number[]> {
+    if (coords.length === 0) return [];
+    try {
+      const locations = coords.map(c => `${c[1]},${c[0]}`).join('|');
+      const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${locations}`);
+      if (!response.ok) throw new Error('Elevation API failed');
+      const data = await response.json();
+      return data.results.map((r: any) => r.elevation);
+    } catch (error) {
+      console.error("Batch Elevation Error:", error);
+      return coords.map(() => 0); // Fallback
     }
   }
 };

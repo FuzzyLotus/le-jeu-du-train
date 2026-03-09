@@ -12,59 +12,35 @@ import { db } from './server/db';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-le-jeu-du-train-12345';
 
-// Middlewares
-function requireAuth(req: any, res: any, next: any) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: 'Non autorisé' });
+import authRouter from './server/routes/auth';
+import gameRouter from './server/routes/game';
+import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils';
 
-  const token = authHeader.split(' ')[1];
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Token invalide' });
-  }
-}
-
-function requireAdmin(req: any, res: any, next: any) {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: 'Accès refusé' });
-  }
-  next();
-}
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs
-  message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' }
-});
+// Helper to parse JSON safely
+const safeJsonParse = (str: string | null) => {
+  if (!str) return undefined;
+  try { return JSON.parse(str); } catch { return undefined; }
+};
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.set('trust proxy', 1); // Trust first proxy (e.g., Nginx in AI Studio)
+  app.set('trust proxy', 1);
 
   app.use(helmet({
-    contentSecurityPolicy: false, // Disabled for Vite dev server compatibility
+    contentSecurityPolicy: false,
   }));
+  app.use((req, res, next) => {
+    res.setHeader('Permissions-Policy', 'geolocation=(self), screen-wake-lock=(self)');
+    next();
+  });
   app.use(express.json({ limit: '10kb' }));
 
-  const gameSubmitLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute
-    max: 10, // Limit each user to 10 requests per minute
-    keyGenerator: (req: any) => req.user ? req.user.id.toString() : req.ip,
-    message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' }
-  });
-
-  // Helper to parse JSON safely
-  const safeJsonParse = (str: string | null) => {
-    if (!str) return undefined;
-    try { return JSON.parse(str); } catch { return undefined; }
-  };
+  app.use('/api/auth', authRouter);
+  app.use('/api/game', gameRouter);
 
   // API Routes
   app.post('/api/auth/signup', authLimiter, async (req, res) => {
@@ -140,10 +116,12 @@ async function startServer() {
           longestTripKm: newUser.longest_trip_km,
           totalDistanceKm: newUser.total_distance_km,
           maxCrossingsInTrip: newUser.max_crossings_in_trip,
+          highestScore: newUser.highest_score,
           createdAt: newUser.created_at,
           isAdmin: newUser.is_admin === 1,
           preferences: safeJsonParse(newUser.preferences),
-          homeLocation: safeJsonParse(newUser.home_location)
+          homeLocation: safeJsonParse(newUser.home_location),
+          achievements: []
         }
       });
     } catch (error: any) {
@@ -178,6 +156,9 @@ async function startServer() {
         { expiresIn: '24h' }
       );
 
+      const unlockedAchievements = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(user.id);
+      const achievementIds = unlockedAchievements.map((a: any) => a.achievement_id);
+
       res.json({
         token,
         user: {
@@ -191,10 +172,12 @@ async function startServer() {
           longestTripKm: user.longest_trip_km,
           totalDistanceKm: user.total_distance_km,
           maxCrossingsInTrip: user.max_crossings_in_trip,
+          highestScore: user.highest_score,
           createdAt: user.created_at,
           isAdmin: user.is_admin === 1,
           preferences: safeJsonParse(user.preferences),
-          homeLocation: safeJsonParse(user.home_location)
+          homeLocation: safeJsonParse(user.home_location),
+          achievements: achievementIds
         }
       });
     } catch (error: any) {
@@ -269,16 +252,194 @@ async function startServer() {
         return res.json({ success: true });
       }
 
-      // Store the PLAINTEXT contact method in the ticket so admins can see it and contact them
+      // Store the masked contact method in the ticket so admins can see it and contact them
+      const maskedContact = contactMethod.includes('@') 
+        ? contactMethod.replace(/(.{2})(.*)(?=@)/, (gp1, gp2, gp3) => gp2 + '*'.repeat(gp3.length))
+        : contactMethod.slice(0, 3) + '****' + contactMethod.slice(-2);
+
       db.prepare(`
         INSERT INTO password_reset_requests (user_id, contact_method, created_at)
         VALUES (?, ?, ?)
-      `).run(user.id, contactMethod, Date.now());
+      `).run(user.id, maskedContact, Date.now());
 
       res.json({ success: true });
     } catch (error: any) {
       console.error('Request reset error:', error.message);
       res.status(500).json({ error: 'Erreur lors de la demande de réinitialisation.' });
+    }
+  });
+
+  app.post('/api/admin/dummy-users', requireAuth, requireAdmin, async (req: any, res: any) => {
+    try {
+      const dummyUsers = [
+        {
+          username: 'alice_w',
+          displayName: 'Alice Wonderland',
+          passwordHash: bcrypt.hashSync('password123', 10),
+          points: 150,
+          totalEarned: 150,
+          tripCount: 12,
+          streak: 5,
+          hasLost: 0,
+          longestTripKm: 45.2,
+          totalDistanceKm: 320.5,
+          maxCrossingsInTrip: 3,
+          highestScore: 150,
+          createdAt: Date.now(),
+          preferences: JSON.stringify({
+            isPublicProfile: true,
+            showTripsOnLeaderboard: true,
+            allowFriendRequests: true,
+            showStats: true,
+            showTripHistory: true
+          })
+        },
+        {
+          username: 'bob_builder',
+          displayName: 'Bob The Builder',
+          passwordHash: bcrypt.hashSync('password123', 10),
+          points: 85,
+          totalEarned: 90,
+          tripCount: 8,
+          streak: 2,
+          hasLost: 1,
+          longestTripKm: 12.5,
+          totalDistanceKm: 85.0,
+          maxCrossingsInTrip: 2,
+          highestScore: 90,
+          createdAt: Date.now(),
+          preferences: JSON.stringify({
+            isPublicProfile: true,
+            showTripsOnLeaderboard: true,
+            allowFriendRequests: true,
+            showStats: true,
+            showTripHistory: false
+          })
+        }
+      ];
+
+      for (const user of dummyUsers) {
+        const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(user.username);
+        if (!existing) {
+          db.prepare(`
+            INSERT INTO users (username, display_name, password_hash, points, total_earned, trip_count, streak, has_lost, longest_trip_km, total_distance_km, max_crossings_in_trip, highest_score, created_at, preferences, is_admin, recovery_phrase, email, phone)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL)
+          `).run(
+            user.username, user.displayName, user.passwordHash, user.points, user.totalEarned, user.tripCount, user.streak, user.hasLost, user.longestTripKm, user.totalDistanceKm, user.maxCrossingsInTrip, user.highestScore, user.createdAt, user.preferences
+          );
+        }
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Generate dummy users error:', error.message);
+      res.status(500).json({ error: 'Erreur lors de la création des utilisateurs factices.' });
+    }
+  });
+
+  app.post('/api/admin/bot-action', requireAuth, requireAdmin, async (req: any, res: any) => {
+    const { action, botName } = req.body;
+    const userId = req.user.id;
+
+    if (!action || !botName) {
+      return res.status(400).json({ error: 'Action et nom du bot requis' });
+    }
+
+    try {
+      const bot = db.prepare('SELECT * FROM users WHERE username = ?').get(botName) as any;
+      if (!bot) {
+        return res.status(404).json({ error: `${botName} introuvable. Générez-les d'abord.` });
+      }
+
+      if (action === 'send_request') {
+        const existing = db.prepare('SELECT * FROM friend_requests WHERE sender_id = ? AND receiver_id = ?').get(bot.id, userId);
+        if (existing) {
+          return res.status(400).json({ error: 'Demande déjà existante' });
+        }
+        db.prepare(`
+          INSERT INTO friend_requests (sender_id, receiver_id, status, created_at)
+          VALUES (?, ?, 'pending', ?)
+        `).run(bot.id, userId, Date.now());
+        res.json({ success: true, message: `${bot.display_name} vous a envoyé une demande!` });
+      } else if (action === 'accept_request') {
+        const request = db.prepare('SELECT * FROM friend_requests WHERE sender_id = ? AND receiver_id = ?').get(userId, bot.id) as any;
+        if (!request) {
+          return res.status(404).json({ error: `Aucune demande de votre part vers ${bot.display_name}` });
+        }
+        db.prepare(`
+          UPDATE friend_requests SET status = 'accepted' WHERE id = ?
+        `).run(request.id);
+        res.json({ success: true, message: `${bot.display_name} a accepté votre demande!` });
+      } else {
+        res.status(400).json({ error: 'Action non reconnue' });
+      }
+    } catch (error: any) {
+      console.error('Bot action error:', error.message);
+      res.status(500).json({ error: 'Erreur lors de l\'action du bot.' });
+    }
+  });
+
+  app.post('/api/admin/generate-trips', requireAuth, requireAdmin, async (req: any, res: any) => {
+    const userId = req.user.id;
+
+    try {
+      let totalPoints = 0;
+      let totalKm = 0;
+      let maxCrossings = 0;
+      let longestTrip = 0;
+
+      for (let i = 0; i < 10; i++) {
+        const distance = Math.floor(Math.random() * 50) + 5;
+        const crossings = Math.floor(Math.random() * 5) + 1;
+        const points = crossings; // Assuming success
+        const date = Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000);
+
+        db.prepare(`
+          INSERT INTO game_sessions (user_id, score, distance_km, crossings, ended_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(userId, points, distance, crossings, date);
+
+        totalPoints += points;
+        totalKm += distance;
+        if (crossings > maxCrossings) maxCrossings = crossings;
+        if (distance > longestTrip) longestTrip = distance;
+      }
+
+      db.prepare(`
+        UPDATE users 
+        SET points = points + ?, 
+            total_earned = total_earned + ?, 
+            trip_count = trip_count + 10, 
+            total_distance_km = total_distance_km + ?, 
+            longest_trip_km = MAX(longest_trip_km, ?), 
+            max_crossings_in_trip = MAX(max_crossings_in_trip, ?)
+        WHERE id = ?
+      `).run(totalPoints, totalPoints, totalKm, longestTrip, maxCrossings, userId);
+
+      const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+
+      res.json({
+        success: true,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          displayName: updatedUser.display_name,
+          points: updatedUser.points,
+          totalEarned: updatedUser.total_earned,
+          tripCount: updatedUser.trip_count,
+          streak: updatedUser.streak,
+          longestTripKm: updatedUser.longest_trip_km,
+          totalDistanceKm: updatedUser.total_distance_km,
+          maxCrossingsInTrip: updatedUser.max_crossings_in_trip,
+          highestScore: updatedUser.highest_score,
+          createdAt: updatedUser.created_at,
+          isAdmin: updatedUser.is_admin === 1,
+          preferences: safeJsonParse(updatedUser.preferences),
+          homeLocation: safeJsonParse(updatedUser.home_location)
+        }
+      });
+    } catch (error: any) {
+      console.error('Generate trips error:', error.message);
+      res.status(500).json({ error: 'Erreur lors de la génération des trajets.' });
     }
   });
 
@@ -334,7 +495,7 @@ async function startServer() {
   app.get('/api/leaderboard', requireAuth, (req, res) => {
     try {
       const users = db.prepare(`
-        SELECT id, username, display_name, points, total_earned, trip_count, streak, longest_trip_km, total_distance_km
+        SELECT id, username, display_name, points, total_earned, trip_count, streak, longest_trip_km, total_distance_km, highest_score
         FROM users
         ORDER BY points DESC
         LIMIT 10
@@ -347,7 +508,7 @@ async function startServer() {
   });
 
   app.post('/api/game/submit', requireAuth, gameSubmitLimiter, (req: any, res: any) => {
-    const { score, distanceKm, crossings, isFailed } = req.body;
+    const { score, distanceKm, crossings, isFailed, tripCount = 1 } = req.body;
     const userId = req.user.id; // Extracted securely from JWT
 
     // Input validation
@@ -363,6 +524,9 @@ async function startServer() {
     if (isFailed !== undefined && typeof isFailed !== 'boolean') {
       return res.status(400).json({ error: 'Format isFailed invalide' });
     }
+    if (typeof tripCount !== 'number' || tripCount < 1 || tripCount > 100 || !Number.isInteger(tripCount)) {
+      return res.status(400).json({ error: 'Nombre de trajets invalide' });
+    }
 
     try {
       const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
@@ -371,6 +535,8 @@ async function startServer() {
       }
 
       const now = Date.now();
+      const avgCrossings = Math.floor(crossings / tripCount);
+      const calculatedScore = isFailed ? 0 : crossings; // Assuming multiplier is 1 for now
       
       if (isFailed) {
         db.prepare(`
@@ -378,34 +544,38 @@ async function startServer() {
           SET points = 0, 
               streak = 0,
               has_lost = 1,
-              trip_count = trip_count + 1, 
+              trip_count = trip_count + ?, 
               total_distance_km = total_distance_km + ?, 
               longest_trip_km = MAX(longest_trip_km, ?), 
               max_crossings_in_trip = MAX(max_crossings_in_trip, ?)
           WHERE id = ?
-        `).run(distanceKm, distanceKm, crossings, userId);
+        `).run(tripCount, distanceKm, distanceKm, avgCrossings, userId);
       } else {
         db.prepare(`
           UPDATE users 
           SET points = points + ?, 
               total_earned = total_earned + ?, 
               streak = streak + ?,
-              trip_count = trip_count + 1, 
+              trip_count = trip_count + ?, 
               total_distance_km = total_distance_km + ?, 
               longest_trip_km = MAX(longest_trip_km, ?), 
-              max_crossings_in_trip = MAX(max_crossings_in_trip, ?)
+              max_crossings_in_trip = MAX(max_crossings_in_trip, ?),
+              highest_score = MAX(highest_score, points + ?)
           WHERE id = ?
-        `).run(score, score, score > 0 ? 1 : 0, distanceKm, distanceKm, crossings, userId);
+        `).run(calculatedScore, calculatedScore, calculatedScore > 0 ? crossings : 0, tripCount, distanceKm, distanceKm, avgCrossings, calculatedScore, userId);
       }
 
       // Record session
       db.prepare(`
         INSERT INTO game_sessions (user_id, score, distance_km, crossings, ended_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(userId, score, distanceKm, crossings, now);
+      `).run(userId, calculatedScore, distanceKm, crossings, now);
 
       const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
       
+      const unlockedAchievements = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(userId);
+      const achievementIds = unlockedAchievements.map((a: any) => a.achievement_id);
+
       res.json({
         id: updatedUser.id,
         username: updatedUser.username,
@@ -420,7 +590,8 @@ async function startServer() {
         createdAt: updatedUser.created_at,
         isAdmin: updatedUser.is_admin === 1,
         preferences: safeJsonParse(updatedUser.preferences),
-        homeLocation: safeJsonParse(updatedUser.home_location)
+        homeLocation: safeJsonParse(updatedUser.home_location),
+        achievements: achievementIds
       });
     } catch (error: any) {
       console.error('Submit game error:', error.message);
@@ -456,10 +627,42 @@ async function startServer() {
   });
 
   // User Profile Endpoints
+  app.post('/api/users/achievements', requireAuth, (req: any, res: any) => {
+    const { achievements } = req.body;
+    if (!Array.isArray(achievements)) {
+      return res.status(400).json({ error: 'Format invalide' });
+    }
+
+    try {
+      const stmt = db.prepare(`
+        INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, unlocked_at)
+        VALUES (?, ?, ?)
+      `);
+      
+      const transaction = db.transaction((userId: number, achs: any[]) => {
+        for (const ach of achs) {
+          if (ach.achievementId && typeof ach.achievementId === 'string') {
+            stmt.run(userId, ach.achievementId, ach.unlockedAt || Date.now());
+          }
+        }
+      });
+      
+      transaction(req.user.id, achievements);
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Save achievements error:', error.message);
+      res.status(500).json({ error: 'Erreur lors de la sauvegarde des succès.' });
+    }
+  });
+
   app.get('/api/users/me', requireAuth, (req: any, res: any) => {
     try {
       const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
       if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+      const unlockedAchievements = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(user.id);
+      const achievementIds = unlockedAchievements.map((a: any) => a.achievement_id);
 
       res.json({
         id: user.id,
@@ -472,10 +675,12 @@ async function startServer() {
         longestTripKm: user.longest_trip_km,
         totalDistanceKm: user.total_distance_km,
         maxCrossingsInTrip: user.max_crossings_in_trip,
+        highestScore: user.highest_score,
         createdAt: user.created_at,
         isAdmin: user.is_admin === 1,
         preferences: safeJsonParse(user.preferences),
-        homeLocation: safeJsonParse(user.home_location)
+        homeLocation: safeJsonParse(user.home_location),
+        achievements: achievementIds
       });
     } catch (error: any) {
       console.error('Get me error:', error.message);
@@ -506,6 +711,9 @@ async function startServer() {
 
       const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
 
+      const unlockedAchievements = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(req.user.id);
+      const achievementIds = unlockedAchievements.map((a: any) => a.achievement_id);
+
       res.json({
         id: updatedUser.id,
         username: updatedUser.username,
@@ -520,7 +728,8 @@ async function startServer() {
         createdAt: updatedUser.created_at,
         isAdmin: updatedUser.is_admin === 1,
         preferences: safeJsonParse(updatedUser.preferences),
-        homeLocation: safeJsonParse(updatedUser.home_location)
+        homeLocation: safeJsonParse(updatedUser.home_location),
+        achievements: achievementIds
       });
     } catch (error: any) {
       console.error('Update me error:', error.message);
@@ -566,7 +775,7 @@ async function startServer() {
           SELECT * FROM game_sessions 
           WHERE user_id = ? 
           ORDER BY ended_at DESC
-          LIMIT 5
+          LIMIT 50
         `).all(user.id);
         
         recentTrips = sessions.map((session: any) => ({
@@ -580,6 +789,10 @@ async function startServer() {
         }));
       }
 
+      // Load achievements
+      const unlockedAchievements = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(user.id);
+      const achievementIds = unlockedAchievements.map((a: any) => a.achievement_id);
+
       res.json({
         user: {
           id: user.id,
@@ -592,11 +805,13 @@ async function startServer() {
           longestTripKm: user.longest_trip_km,
           totalDistanceKm: user.total_distance_km,
           maxCrossingsInTrip: user.max_crossings_in_trip,
+          highestScore: user.highest_score,
           createdAt: user.created_at,
           preferences: prefs
         },
         friendStatus,
-        recentTrips
+        recentTrips,
+        achievements: achievementIds
       });
     } catch (error: any) {
       console.error('Get user error:', error.message);
@@ -619,8 +834,8 @@ async function startServer() {
       
       res.json(requests);
     } catch (error: any) {
-      console.error('Get friends error:', error.message);
-      res.status(500).json({ error: 'Erreur serveur' });
+      console.error('Get friends error details:', error);
+      res.status(500).json({ error: 'Erreur serveur', details: error.message });
     }
   });
 
@@ -688,6 +903,290 @@ async function startServer() {
       res.json({ success: true });
     } catch (error: any) {
       console.error('Reject friend error:', error.message);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
+  // GitHub Integration Helpers
+  async function createGithubIssue(title: string, body: string, labels: string[] = []) {
+    let token = process.env.GITHUB_TOKEN?.trim();
+    let repo = process.env.GITHUB_REPO?.trim();
+
+    if (!token || !repo) {
+      console.warn('GitHub integration not configured (missing GITHUB_TOKEN or GITHUB_REPO)');
+      return null;
+    }
+
+    // Smart parsing for repo: handle full URLs or just owner/repo
+    if (repo.includes('github.com/')) {
+      repo = repo.split('github.com/')[1].split('?')[0].split('#')[0];
+      if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+    }
+    
+    // Remove leading/trailing slashes
+    repo = repo.replace(/^\/+|\/+$/g, '');
+
+    if (!repo.includes('/') || repo.split('/').length !== 2) {
+      console.error(`GitHub API error: GITHUB_REPO format invalid. Received: "${repo}". Expected "owner/repo" (e.g. FuzzyLotus/le-jeu-du-train)`);
+      return null;
+    }
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Le-Jeu-Du-Train-App'
+        },
+        body: JSON.stringify({ title, body, labels })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('GitHub API error:', response.status, JSON.stringify(data, null, 2));
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Failed to create GitHub issue:', error);
+      return null;
+    }
+  }
+
+  async function getGithubIssueStatus(issueNumber: number) {
+    let token = process.env.GITHUB_TOKEN?.trim();
+    let repo = process.env.GITHUB_REPO?.trim();
+
+    if (!token || !repo || !issueNumber) return null;
+
+    if (repo.includes('github.com/')) {
+      repo = repo.split('github.com/')[1].split('?')[0].split('#')[0];
+      if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+    }
+    repo = repo.replace(/^\/+|\/+$/g, '');
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Le-Jeu-Du-Train-App'
+        }
+      });
+
+      if (!response.ok) return null;
+      const data = await response.json();
+      
+      // Map GitHub state to app status
+      // state: 'open' or 'closed'
+      // state_reason: 'completed', 'not_planned', or null
+      if (data.state === 'closed') {
+        return data.state_reason === 'completed' ? 'completed' : 'closed';
+      }
+      return 'pending';
+    } catch (error) {
+      console.error('Failed to fetch GitHub issue status:', error);
+      return null;
+    }
+  }
+
+  async function getGithubIssueComments(issueNumber: number) {
+    let token = process.env.GITHUB_TOKEN?.trim();
+    let repo = process.env.GITHUB_REPO?.trim();
+
+    if (!token || !repo || !issueNumber) return [];
+
+    if (repo.includes('github.com/')) {
+      repo = repo.split('github.com/')[1].split('?')[0].split('#')[0];
+      if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+    }
+    repo = repo.replace(/^\/+|\/+$/g, '');
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}/comments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Le-Jeu-Du-Train-App'
+        }
+      });
+
+      if (!response.ok) return [];
+      const comments = await response.json();
+      
+      return comments.map((c: any) => ({
+        senderId: -1, // System/GitHub
+        isAdmin: true, // GitHub comments are treated as support responses
+        message: c.body,
+        createdAt: new Date(c.created_at).getTime(),
+        githubCommentId: c.id
+      }));
+    } catch (error) {
+      console.error('Failed to fetch GitHub comments:', error);
+      return [];
+    }
+  }
+
+  // Feedback Endpoints
+  app.post('/api/feedback/submit', requireAuth, async (req: any, res: any) => {
+    const { type, message } = req.body;
+    const userId = req.user.id;
+
+    if (!message || typeof message !== 'string' || message.trim().length < 2) {
+      return res.status(400).json({ error: 'Message trop court (min. 2 caractères)' });
+    }
+
+    try {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+      if (!user) {
+        return res.status(404).json({ error: 'Utilisateur non trouvé' });
+      }
+      
+      const now = Date.now();
+
+      // Create GitHub Issue if configured
+      let githubIssue = null;
+      try {
+        const issueTitle = `[${type.toUpperCase()}] ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`;
+        const issueBody = `**Type:** ${type}\n**Utilisateur:** ${user.username} (ID: ${userId})\n**Date:** ${new Date(now).toLocaleString()}\n\n**Message:**\n${message}`;
+        const labels = [type === 'bug' ? 'bug' : 'enhancement', 'user-feedback'];
+        
+        githubIssue = await createGithubIssue(issueTitle, issueBody, labels);
+      } catch (ghError) {
+        console.error('GitHub issue creation failed, but continuing with DB save:', ghError);
+      }
+
+      const stmt = db.prepare(`
+        INSERT INTO feedback (user_id, type, message, created_at, updated_at, github_issue_number, github_issue_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const info = stmt.run(
+        userId, 
+        type, 
+        message.trim(), 
+        now, 
+        now, 
+        githubIssue?.number || null, 
+        githubIssue?.html_url || null
+      );
+
+      res.json({ 
+        success: true, 
+        id: info.lastInsertRowid,
+        githubIssueNumber: githubIssue?.number,
+        githubIssueUrl: githubIssue?.html_url
+      });
+    } catch (error: any) {
+      console.error('Submit feedback error:', error);
+      res.status(500).json({ error: `Erreur serveur: ${error.message}` });
+    }
+  });
+
+  app.get('/api/feedback/my', requireAuth, async (req: any, res: any) => {
+    try {
+      const feedback = db.prepare(`
+        SELECT * FROM feedback 
+        WHERE user_id = ? 
+        ORDER BY created_at DESC
+      `).all(req.user.id) as any[];
+      
+      const formatted = [];
+      for (const f of feedback) {
+        let currentStatus = f.status;
+        let localReplies = typeof f.replies === 'string' ? (safeJsonParse(f.replies) || []) : (f.replies || []);
+        
+        // If it has a GitHub issue, check for updates
+        if (f.github_issue_number) {
+          // Sync status
+          if (f.status !== 'completed' && f.status !== 'closed') {
+            const newStatus = await getGithubIssueStatus(f.github_issue_number);
+            if (newStatus && newStatus !== f.status) {
+              db.prepare('UPDATE feedback SET status = ?, updated_at = ? WHERE id = ?')
+                .run(newStatus, Date.now(), f.id);
+              currentStatus = newStatus;
+            }
+          }
+
+          // Sync comments
+          const githubComments = await getGithubIssueComments(f.github_issue_number);
+          if (githubComments.length > 0) {
+            // Merge comments: keep local replies and add GitHub comments that aren't already there
+            // We use githubCommentId to avoid duplicates if we were to save them back, 
+            // but for now we just merge them for the response.
+            const mergedReplies = [...localReplies];
+            
+            for (const ghc of githubComments) {
+              // Check if this comment is already in local replies (by message and date roughly, or just message)
+              const exists = localReplies.some((r: any) => r.message === ghc.message);
+              if (!exists) {
+                mergedReplies.push(ghc);
+              }
+            }
+            
+            // Sort by date
+            mergedReplies.sort((a: any, b: any) => a.createdAt - b.createdAt);
+            localReplies = mergedReplies;
+          }
+        }
+
+        formatted.push({
+          id: f.id,
+          userId: f.user_id,
+          type: f.type,
+          message: f.message,
+          status: currentStatus,
+          createdAt: f.created_at,
+          updatedAt: f.updated_at,
+          replies: localReplies,
+          githubIssueNumber: f.github_issue_number,
+          githubIssueUrl: f.github_issue_url
+        });
+      }
+
+      res.json(formatted);
+    } catch (error: any) {
+      console.error('Get my feedback error:', error.message);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  });
+
+  app.post('/api/feedback/reply', requireAuth, (req: any, res: any) => {
+    const { feedbackId, message } = req.body;
+    const userId = req.user.id;
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message vide' });
+    }
+
+    try {
+      const feedback = db.prepare('SELECT * FROM feedback WHERE id = ?').get(feedbackId) as any;
+      if (!feedback) return res.status(404).json({ error: 'Feedback non trouvé' });
+
+      // Security: Only owner or admin can reply
+      if (feedback.user_id !== userId && !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Action non autorisée' });
+      }
+
+      const replies = safeJsonParse(feedback.replies) || [];
+      const newReply = {
+        senderId: userId,
+        isAdmin: req.user.isAdmin === true,
+        message: message.trim(),
+        createdAt: Date.now()
+      };
+      replies.push(newReply);
+
+      db.prepare('UPDATE feedback SET replies = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(replies), Date.now(), feedbackId);
+
+      res.json({ success: true, reply: newReply });
+    } catch (error: any) {
+      console.error('Reply feedback error:', error.message);
       res.status(500).json({ error: 'Erreur serveur' });
     }
   });

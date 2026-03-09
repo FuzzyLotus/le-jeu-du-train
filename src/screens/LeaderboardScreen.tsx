@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trophy, Medal, Users, Globe } from 'lucide-react';
+import { ArrowLeft, BarChart3, Users, Globe } from 'lucide-react';
 import { db } from '../db/database';
 import { useAuthStore } from '../store/useAuthStore';
 import { AuthService } from '../services/AuthService';
@@ -23,9 +23,23 @@ export function LeaderboardScreen() {
           fetch('/api/friends', { headers: AuthService.getAuthHeaders() })
         ]);
 
+        if (leaderboardRes.status === 401 || friendsRes.status === 401) {
+          useAuthStore.getState().logout();
+          navigate('/login');
+          return;
+        }
+
         if (leaderboardRes.ok) {
           const data = await leaderboardRes.json();
-          setUsers(data);
+          setUsers(data.map((u: any) => ({
+            ...u,
+            displayName: u.display_name,
+            totalEarned: u.total_earned,
+            tripCount: u.trip_count,
+            longestTripKm: u.longest_trip_km,
+            totalDistanceKm: u.total_distance_km,
+            highestScore: u.highest_score
+          })));
         }
 
         if (friendsRes.ok) {
@@ -49,10 +63,14 @@ export function LeaderboardScreen() {
 
   const getRankIcon = (index: number) => {
     switch (index) {
-      case 0: return <span className="text-2xl">🥇</span>;
-      case 1: return <span className="text-2xl">🥈</span>;
-      case 2: return <span className="text-2xl">🥉</span>;
-      default: return <span className="text-white/30 font-bold w-8 text-center">{index + 1}</span>;
+      case 0: return <span className="text-3xl drop-shadow-lg">🥇</span>;
+      case 1: return <span className="text-3xl drop-shadow-lg">🥈</span>;
+      case 2: return <span className="text-3xl drop-shadow-lg">🥉</span>;
+      default: return (
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-white/50 font-bold text-xs border border-white/5">
+          {index + 1}
+        </span>
+      );
     }
   };
 
@@ -66,7 +84,7 @@ export function LeaderboardScreen() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-primary" />
+          <BarChart3 className="w-6 h-6 text-primary" />
           <h1 className="text-xl font-display text-white">Classement</h1>
         </div>
       </header>
@@ -135,9 +153,12 @@ export function LeaderboardScreen() {
                 <span className="text-xs text-white/40 truncate">@{user.username}</span>
               </div>
 
-              <div className="flex flex-col items-end shrink-0">
-                <span className="font-display text-xl text-white">{user.points}</span>
-                <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
+              <div className="flex flex-col items-end shrink-0 text-right">
+                <span className="font-display text-xl text-white leading-none mb-1">{user.points}</span>
+                <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold leading-none mb-1">Points</span>
+                {user.highestScore !== undefined && user.highestScore > 0 && (
+                  <span className="text-[10px] text-primary/80 font-mono font-bold">Record: {user.highestScore}</span>
+                )}
               </div>
             </div>
           );

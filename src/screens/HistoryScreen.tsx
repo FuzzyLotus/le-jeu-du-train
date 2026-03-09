@@ -54,54 +54,71 @@ export function HistoryScreen() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6 relative pl-4">
+        {/* Timeline Line */}
+        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-white/10 -translate-x-1/2" />
+
         {trips.map((trip) => (
-          <div 
-            key={trip.id}
-            className={clsx(
-              "flex flex-col p-4 rounded-2xl border transition-all",
-              trip.success 
-                ? "bg-success/5 border-success/20" 
-                : "bg-failure/5 border-failure/20"
-            )}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2 text-sm text-white/50">
-                <MapPin className="w-4 h-4" />
-                <span className="truncate max-w-[200px]">{trip.routeName}</span>
-              </div>
-              <span className="text-xs text-white/30 shrink-0">{formatDate(trip.date)}</span>
-            </div>
+          <div key={trip.id} className="relative pl-6">
+            {/* Timeline Dot */}
+            <div className={clsx(
+              "absolute left-0 top-6 w-3 h-3 rounded-full border-2 border-surface -translate-x-1/2 z-10",
+              trip.success ? "bg-success" : "bg-failure"
+            )} />
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {trip.success ? (
-                  <CheckCircle2 className="w-6 h-6 text-success" />
-                ) : (
-                  <XCircle className="w-6 h-6 text-failure" />
-                )}
-                <div className="flex flex-col">
-                  <span className={clsx("font-bold", trip.success ? "text-success" : "text-failure")}>
-                    {trip.success ? "Réussi" : "Échoué"}
-                  </span>
-                  <span className="text-xs text-white/40">
-                    {trip.distanceKm.toFixed(1)} km • {trip.crossingsCount} passages
-                  </span>
+            <div 
+              className={clsx(
+                "flex flex-col p-5 rounded-3xl border transition-all hover:bg-white/5",
+                trip.success 
+                  ? "bg-surface border-white/5 shadow-[0_4px_20px_rgba(0,0,0,0.2)]" 
+                  : "bg-surface border-white/5 opacity-80"
+              )}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-2 text-sm text-white/70 font-bold">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <span className="truncate max-w-[180px]">{trip.routeName}</span>
                 </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/30 shrink-0 bg-white/5 px-2 py-1 rounded-md">
+                  {formatDate(trip.date)}
+                </span>
               </div>
 
-              <div className="flex flex-col items-end">
-                <span className={clsx("font-display text-xl", trip.success ? "text-success" : "text-failure")}>
-                  {trip.success ? `+${trip.crossingsCount}` : "0"}
-                </span>
-                <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={clsx(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                    trip.success ? "bg-success/10 text-success" : "bg-failure/10 text-failure"
+                  )}>
+                    {trip.success ? (
+                      <CheckCircle2 className="w-6 h-6" />
+                    ) : (
+                      <XCircle className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className={clsx("font-bold text-sm", trip.success ? "text-success" : "text-failure")}>
+                      {trip.success ? "Réussi" : "Échoué"}
+                    </span>
+                    <span className="text-xs text-white/40 mt-0.5">
+                      {trip.distanceKm.toFixed(1)} km • {trip.crossingsCount} passages
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-end">
+                  <span className={clsx("font-display text-2xl", trip.success ? "text-success" : "text-white/20")}>
+                    {trip.success ? `+${trip.crossingsCount}` : "0"}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 font-bold">Points</span>
+                </div>
               </div>
             </div>
           </div>
         ))}
 
         {trips.length === 0 && (
-          <div className="text-center text-white/50 py-10">
+          <div className="text-center text-white/50 py-10 pl-0">
             Aucun trajet enregistré.
           </div>
         )}

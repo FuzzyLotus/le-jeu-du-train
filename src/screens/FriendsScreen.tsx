@@ -26,6 +26,12 @@ export function FriendsScreen() {
           headers: AuthService.getAuthHeaders()
         });
         
+        if (response.status === 401) {
+          useAuthStore.getState().logout();
+          navigate('/login');
+          return;
+        }
+
         if (!response.ok) throw new Error('Failed to load friends');
         const data = await response.json();
 

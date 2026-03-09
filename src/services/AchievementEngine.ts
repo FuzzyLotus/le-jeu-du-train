@@ -1,136 +1,267 @@
 import { db } from '../db/database';
-import type { User } from '../types/models';
+import type { User, Trip } from '../types/models';
 import { useToastStore } from '../store/useToastStore';
 
 export const ACHIEVEMENTS = [
-  // Existing
-  { id: 'first', title: 'Premier Passage 🚂', description: 'Gagne ton premier point en réussissant un passage.', condition: (u: User) => u.totalEarned >= 1 },
-  { id: 'ten', title: 'Dix Points ⭐', description: 'Atteins un score actuel de 10 points.', condition: (u: User) => u.points >= 10 },
-  { id: 'fifty', title: 'Cinquante! 🏆', description: 'Atteins un score actuel de 50 points.', condition: (u: User) => u.points >= 50 },
-  { id: 'hundred', title: 'Centurion 👑', description: 'Atteins un score actuel de 100 points.', condition: (u: User) => u.points >= 100 },
-  { id: 'trips5', title: 'Voyageur 🗺️', description: 'Termine 5 trajets.', condition: (u: User) => u.tripCount >= 5 },
-  { id: 'trips20', title: 'Globe-Trotter 🌍', description: 'Termine 20 trajets.', condition: (u: User) => u.tripCount >= 20 },
-  { id: 'streak5', title: 'Sans Faute 🔥', description: 'Réussis 5 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 5 },
-  { id: 'comeback', title: 'Renaissance 🦅', description: 'Gagne des points après avoir perdu une partie.', condition: (u: User) => u.hasLost && u.points > 0 },
-  { id: 'long', title: 'Grand Voyage 🛣️', description: 'Effectue un trajet de plus de 200 km.', condition: (u: User) => u.longestTripKm >= 200 },
-  { id: 'iron_marathoner', title: 'The Iron Marathoner 🏃', description: 'Parcours un total de 1000 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 1000 },
-  { id: 'ten_x', title: 'Dix Barrières 🚧', description: 'Termine un trajet avec au moins 10 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 10 },
+  // Common (1-15)
+  { id: '1', title: 'Premier Passage 🚂', description: 'Gagne 1 point.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.totalEarned >= 1 },
+  { id: '2', title: 'Dix Points ⭐', description: 'Atteins 10 points.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.points >= 10 },
+  { id: '3', title: 'Cinquante! 🏆', description: 'Atteins 50 points.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.points >= 50 },
+  { id: '4', title: 'Voyageur 🗺️', description: '5 trajets.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.tripCount >= 5 },
+  { id: '5', title: 'Sans Faute 🔥', description: '5 streak.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.streak >= 5 },
+  { id: '6', title: 'Promeneur 🚶', description: '50 km total.', rarity: 'Common', condition: (u: User, trips: Trip[]) => (u.totalDistanceKm || 0) >= 50 },
+  { id: '7', title: 'Le Touriste 🎒', description: 'Échoue dès le tout premier passage.', rarity: 'Common', condition: (u: User, trips: Trip[]) => u.hasLost && u.tripCount === 1 },
+  { id: '8', title: 'Oups, encore raté 💥', description: 'Échoue deux trajets d\'affilée.', rarity: 'Common', condition: (u: User, trips: Trip[]) => {
+    const sorted = [...trips].sort((a, b) => b.date - a.date);
+    return sorted.length >= 2 && !sorted[0].success && !sorted[1].success;
+  }},
+  { id: '9', title: 'Lève-tôt 🌅', description: 'Passe avant 6h00 du matin.', rarity: 'Common', condition: (u: User, trips: Trip[]) => {
+    const h = new Date().getHours();
+    return h >= 4 && h < 6;
+  }},
+  { id: '10', title: 'Oiseau de nuit 🦉', description: 'Passe après minuit.', rarity: 'Common', condition: (u: User, trips: Trip[]) => {
+    const h = new Date().getHours();
+    return h >= 0 && h < 4;
+  }},
+  { id: '11', title: 'Distrait 🧠', description: 'Échoue, puis réussis immédiatement après.', rarity: 'Common', condition: (u: User, trips: Trip[]) => {
+    const sorted = [...trips].sort((a, b) => b.date - a.date);
+    return sorted.length >= 2 && sorted[0].success && !sorted[1].success;
+  }},
+  { id: '12', title: 'Le Sceptique 🤨', description: 'Ajoute un trajet avec 0 passage.', rarity: 'Common', condition: (u: User, trips: Trip[]) => trips.some(t => t.crossingsCount === 0) },
+  { id: '13', title: 'Chance du débutant 🍀', description: 'Réussis dès le premier essai.', rarity: 'Common', condition: (u: User, trips: Trip[]) => trips.length === 1 && trips[0].success },
+  { id: '14', title: 'Le Procrastinateur ⏳', description: 'Joue après 1 semaine d\'inactivité.', rarity: 'Common', condition: (u: User, trips: Trip[]) => {
+    const sorted = [...trips].sort((a, b) => b.date - a.date);
+    if (sorted.length < 2) return false;
+    return (sorted[0].date - sorted[1].date) > 7 * 24 * 60 * 60 * 1000;
+  }},
+  { id: '15', title: 'Le Maladroit 🦶', description: 'Échoue un trajet avec seulement 1 passage.', rarity: 'Common', condition: (u: User, trips: Trip[]) => trips.some(t => !t.success && t.crossingsCount === 1) },
 
-  // New - Easy
-  { id: 'streak_3', title: 'Hat Trick 🎩', description: 'Réussis 3 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 3 },
-  { id: 'beginner_5', title: 'Débutant 👶', description: 'Gagne un total de 5 points (cumulés).', condition: (u: User) => u.totalEarned >= 5 },
-  { id: 'distance_50', title: 'Promeneur 🚶', description: 'Parcours un total de 50 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 50 },
-  { id: 'oops', title: 'Oups! 💥', description: 'Perds une partie en oubliant de lever les jambes.', condition: (u: User) => u.hasLost },
-  { id: 'crossings_5_trip', title: 'Cinq d\'un Coup 🖐️', description: 'Termine un trajet avec au moins 5 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 5 },
+  // Uncommon (16-30)
+  { id: '16', title: 'Le Nouveau 🐣', description: 'Crée un compte.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => !!u.id },
+  { id: '17', title: 'Premier Ami 🤝', description: 'Ajoute 1 ami.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const count = await db.friendRequests.where({ status: 'accepted' }).and(r => r.senderId === u.id || r.receiverId === u.id!).count();
+    return count >= 1;
+  }},
+  { id: '18', title: 'Apprentissage Rapide ⚡', description: 'Gagne 10 pts dans la première heure.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => {
+    if (u.totalEarned < 10) return false;
+    const firstTrip = [...trips].sort((a, b) => a.date - b.date)[0];
+    if (!firstTrip) return false;
+    const tenthPointTrip = [...trips].sort((a, b) => a.date - b.date).reduce((acc, t) => {
+      if (acc.pts >= 10) return acc;
+      return { pts: acc.pts + (t.success ? t.crossingsCount : 0), time: t.date };
+    }, { pts: 0, time: firstTrip.date });
+    return tenthPointTrip.pts >= 10 && (tenthPointTrip.time - firstTrip.date) <= 60 * 60 * 1000;
+  }},
+  { id: '19', title: 'Centurion 👑', description: 'Atteins 100 points.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.points >= 100 },
+  { id: '20', title: 'Quart de Mille 🏁', description: 'Atteins 250 points.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.points >= 250 },
+  { id: '21', title: 'Globe-Trotter 🌍', description: '20 trajets.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.tripCount >= 20 },
+  { id: '22', title: 'Chauffeur 🧢', description: '50 trajets.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.tripCount >= 50 },
+  { id: '23', title: 'Sérieux 🎯', description: '10 streak.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.streak >= 10 },
+  { id: '24', title: 'Imbattable 🚀', description: '25 streak.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => u.streak >= 25 },
+  { id: '25', title: 'Aventurier 🤠', description: '250 km total.', rarity: 'Uncommon', condition: (u: User, trips: Trip[]) => (u.totalDistanceKm || 0) >= 250 },
+  { id: '26', title: 'Guerrier du Week-end 🏖️', description: '5 trajets le samedi ou dimanche.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const weekendTrips = trips.filter(t => {
+      const d = new Date(t.date);
+      return d.getDay() === 0 || d.getDay() === 6;
+    });
+    return weekendTrips.length >= 5;
+  }},
+  { id: '27', title: 'Pause Déjeuner 🥪', description: '5 trajets pendant le déjeuner.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const lunchTrips = trips.filter(t => {
+      const d = new Date(t.date);
+      return d.getHours() >= 12 && d.getHours() < 14;
+    });
+    return lunchTrips.length >= 5;
+  }},
+  { id: '28', title: 'Heure de Pointe 🚗', description: '5 trajets à 17h.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const rushTrips = trips.filter(t => {
+      const d = new Date(t.date);
+      return d.getHours() === 17;
+    });
+    return rushTrips.length >= 5;
+  }},
+  { id: '29', title: 'Régulier 🗓️', description: '3 trajets en 1 seule journée.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const tripsByDay = trips.reduce((acc, t) => {
+      const day = new Date(t.date).toDateString();
+      acc[day] = (acc[day] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.values(tripsByDay).some(count => count >= 3);
+  }},
+  { id: '30', title: 'Mondain 👯', description: 'Ajoute 3 amis.', rarity: 'Uncommon', condition: async (u: User, trips: Trip[]) => {
+    const count = await db.friendRequests.where({ status: 'accepted' }).and(r => r.senderId === u.id || r.receiverId === u.id!).count();
+    return count >= 3;
+  }},
 
-  // New - Medium
-  { id: 'trips_10', title: 'Habitué 🚕', description: 'Termine 10 trajets.', condition: (u: User) => u.tripCount >= 10 },
-  { id: 'points_25', title: 'Quart de Siècle 🪙', description: 'Atteins un score actuel de 25 points.', condition: (u: User) => u.points >= 25 },
-  { id: 'streak_10', title: 'Sérieux 🔥', description: 'Réussis 10 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 10 },
-  { id: 'collector_50', title: 'Collectionneur 📥', description: 'Gagne un total de 50 points (cumulés).', condition: (u: User) => u.totalEarned >= 50 },
-  { id: 'distance_250', title: 'Aventurier 🤠', description: 'Parcours un total de 250 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 250 },
-  { id: 'points_75', title: 'Soixante-Quinze 🎰', description: 'Atteins un score actuel de 75 points.', condition: (u: User) => u.points >= 75 },
+  // Rare (31-40)
+  { id: '31', title: 'Le Minimaliste 🤏', description: '1 trajet, exactement 1 passage.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => trips.some(t => t.crossingsCount === 1) },
+  { id: '32', title: 'Le Planificateur 🗺️', description: '5 trajets > 10km chacun.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => trips.filter(t => t.distanceKm > 10).length >= 5 },
+  { id: '33', title: 'Le Manuel ✍️', description: '5 trajets < 1km chacun.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => trips.filter(t => t.distanceKm > 0 && t.distanceKm < 1).length >= 5 },
+  { id: '34', title: 'Main Sûre ✋', description: '10 passages d\'affilée.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => u.streak >= 10 },
+  { id: '35', title: 'Le Navetteur 🚇', description: '10 trajets avec 2 passages ou plus.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => trips.filter(t => t.crossingsCount >= 2).length >= 10 },
+  { id: '36', title: 'Matinal ☀️', description: '10 trajets avant 8h du matin.', rarity: 'Rare', condition: async (u: User, trips: Trip[]) => {
+    const earlyTrips = trips.filter(t => {
+      const d = new Date(t.date);
+      return d.getHours() < 8;
+    });
+    return earlyTrips.length >= 10;
+  }},
+  { id: '37', title: 'Alpiniste 🧗', description: 'Passe au-dessus de 1000m d\'altitude.', rarity: 'Rare', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => (t.maxElevation || 0) >= 1000);
+  }},
+  { id: '38', title: 'Longue Distance 🚚', description: 'Termine un trajet de plus de 100km.', rarity: 'Rare', condition: (u: User, trips: Trip[]) => trips.some(t => t.distanceKm >= 100) },
+  { id: '39', title: 'Habitant des Tunnels 🚇', description: 'Passe dans un tunnel.', rarity: 'Rare', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => t.hasTunnel);
+  }},
+  { id: '40', title: 'Traverseur de Rivières 🌊', description: 'Passe sur un pont.', rarity: 'Rare', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => t.hasBridge);
+  }},
 
-  // New - Hard
-  { id: 'trips_50', title: 'Chauffeur 🧢', description: 'Termine 50 trajets.', condition: (u: User) => u.tripCount >= 50 },
-  { id: 'streak_20', title: 'Imbattable 🚀', description: 'Réussis 20 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 20 },
-  { id: 'collector_200', title: 'Accumulateur 🏦', description: 'Gagne un total de 200 points (cumulés).', condition: (u: User) => u.totalEarned >= 200 },
-  { id: 'points_150', title: 'Expert 🎓', description: 'Atteins un score actuel de 150 points.', condition: (u: User) => u.points >= 150 },
-  { id: 'crossings_15_trip', title: 'Slalom Géant ⛷️', description: 'Termine un trajet avec au moins 15 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 15 },
+  // Very Rare (41-48)
+  { id: '41', title: 'Le Revenant 🦅', description: 'Récupère 50 pts après une défaite.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.hasLost && u.points >= 50 },
+  { id: '42', title: 'Flambeur 🎲', description: '10 passages ou plus en 1 seul trajet.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.maxCrossingsInTrip >= 10 },
+  { id: '43', title: 'Casse-cou 😈', description: '5 trajets avec 5 passages ou plus.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => trips.filter(t => t.crossingsCount >= 5).length >= 5 },
+  { id: '44', title: 'Survivant 🛡️', description: '200 pts sans aucune défaite.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.points >= 200 && !u.hasLost },
+  { id: '45', title: 'Le Joueur 🃏', description: 'Gagne avec une série de 50+.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.streak >= 50 },
+  { id: '46', title: 'Marathonien 🏃‍♂️', description: '50 km en 1 seul trajet.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => (u.longestTripKm || 0) >= 50 },
+  { id: '47', title: 'Concentré 🧘', description: '20 passages en un seul trajet.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.maxCrossingsInTrip >= 20 },
+  { id: '48', title: 'Le Perfectionniste 💎', description: '10 trajets, 100% de réussite.', rarity: 'Very Rare', condition: (u: User, trips: Trip[]) => u.tripCount >= 10 && !u.hasLost },
 
-  // New - Expert
-  { id: 'distance_2000', title: 'Explorateur 🧭', description: 'Parcours un total de 2000 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 2000 },
-  { id: 'trips_100', title: 'Centenaire 🎂', description: 'Termine 100 trajets.', condition: (u: User) => u.tripCount >= 100 },
-  { id: 'streak_50', title: 'Légende Vivante 🌟', description: 'Réussis 50 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 50 },
-  { id: 'points_300', title: 'Dieu du Rail ⚡', description: 'Atteins un score actuel de 300 points.', condition: (u: User) => u.points >= 300 },
-
-  // New - Novice (Very Easy)
-  { id: 'trip_2', title: 'Double Détente ✌️', description: 'Termine 2 trajets.', condition: (u: User) => u.tripCount >= 2 },
-  { id: 'points_5', title: 'Petit Pas 🐾', description: 'Atteins un score actuel de 5 points.', condition: (u: User) => u.points >= 5 },
-  { id: 'distance_10', title: 'Echauffement 👟', description: 'Parcours un total de 10 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 10 },
-  { id: 'streak_2', title: 'Duo Dynamique 👯', description: 'Réussis 2 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 2 },
-  { id: 'total_15', title: 'Tirelire 🐷', description: 'Gagne un total de 15 points (cumulés).', condition: (u: User) => u.totalEarned >= 15 },
-
-  // New - Apprentice (Easy)
-  { id: 'trip_15', title: 'Routier Sympa 🚛', description: 'Termine 15 trajets.', condition: (u: User) => u.tripCount >= 15 },
-  { id: 'points_15', title: 'Quinze! 🎱', description: 'Atteins un score actuel de 15 points.', condition: (u: User) => u.points >= 15 },
-  { id: 'points_20', title: 'Vingt/Vingt 🦉', description: 'Atteins un score actuel de 20 points.', condition: (u: User) => u.points >= 20 },
-  { id: 'streak_7', title: 'Chanceux 🍀', description: 'Réussis 7 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 7 },
-  { id: 'distance_100', title: 'Cent Bornes ⛽', description: 'Parcours un total de 100 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 100 },
-  { id: 'total_30', title: 'Petite Fortune 💰', description: 'Gagne un total de 30 points (cumulés).', condition: (u: User) => u.totalEarned >= 30 },
-  { id: 'crossings_3', title: 'Triple Barrière 🚧', description: 'Termine un trajet avec au moins 3 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 3 },
-  { id: 'crossings_7', title: 'Sept Merveilles 🕌', description: 'Termine un trajet avec au moins 7 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 7 },
-
-  // New - Journeyman (Medium)
-  { id: 'trip_30', title: 'Grand Voyageur 🧳', description: 'Termine 30 trajets.', condition: (u: User) => u.tripCount >= 30 },
-  { id: 'trip_40', title: 'Nomade ⛺', description: 'Termine 40 trajets.', condition: (u: User) => u.tripCount >= 40 },
-  { id: 'points_30', title: 'Trente Glorieuses 📈', description: 'Atteins un score actuel de 30 points.', condition: (u: User) => u.points >= 30 },
-  { id: 'points_40', title: 'Quarantaine 🦠', description: 'Atteins un score actuel de 40 points.', condition: (u: User) => u.points >= 40 },
-  { id: 'streak_12', title: 'Douzaine 🥚', description: 'Réussis 12 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 12 },
-  { id: 'streak_15', title: 'Quinze à la Suite 🎯', description: 'Réussis 15 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 15 },
-  { id: 'distance_500', title: 'Demi-Millier 🏁', description: 'Parcours un total de 500 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 500 },
-  { id: 'total_75', title: 'Bonne Récolte 🌾', description: 'Gagne un total de 75 points (cumulés).', condition: (u: User) => u.totalEarned >= 75 },
-  { id: 'total_125', title: 'Gros Magot 💎', description: 'Gagne un total de 125 points (cumulés).', condition: (u: User) => u.totalEarned >= 125 },
-  { id: 'crossings_8', title: 'Octogone 🛑', description: 'Termine un trajet avec au moins 8 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 8 },
-  { id: 'crossings_12', title: 'Douze Travaux 💪', description: 'Termine un trajet avec au moins 12 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 12 },
-
-  // New - Advanced (Hard)
-  { id: 'trip_60', title: 'Route 66 🛣️', description: 'Termine 60 trajets.', condition: (u: User) => u.tripCount >= 60 },
-  { id: 'trip_75', title: 'Diamant 💎', description: 'Termine 75 trajets.', condition: (u: User) => u.tripCount >= 75 },
-  { id: 'points_60', title: 'Soixante ⏲️', description: 'Atteins un score actuel de 60 points.', condition: (u: User) => u.points >= 60 },
-  { id: 'points_80', title: 'Quatre-Vingts 🌍', description: 'Atteins un score actuel de 80 points.', condition: (u: User) => u.points >= 80 },
-  { id: 'points_90', title: 'Angle Droit 📐', description: 'Atteins un score actuel de 90 points.', condition: (u: User) => u.points >= 90 },
-  { id: 'streak_25', title: 'Quart de Cent 💯', description: 'Réussis 25 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 25 },
-  { id: 'streak_30', title: 'Trente Rugissants 🦁', description: 'Réussis 30 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 30 },
-  { id: 'distance_1500', title: 'Mille Cinq 🏊', description: 'Parcours un total de 1500 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 1500 },
-  { id: 'total_350', title: 'Banquier 🏦', description: 'Gagne un total de 350 points (cumulés).', condition: (u: User) => u.totalEarned >= 350 },
-  { id: 'total_500', title: 'Demi-Kilo ⚖️', description: 'Gagne un total de 500 points (cumulés).', condition: (u: User) => u.totalEarned >= 500 },
-  { id: 'crossings_18', title: 'Majeur 🔞', description: 'Termine un trajet avec au moins 18 passages à niveau.', condition: (u: User) => u.maxCrossingsInTrip >= 18 },
-
-  // New - Master (Very Hard)
-  { id: 'trip_150', title: 'Légende de la Route 🏎️', description: 'Termine 150 trajets.', condition: (u: User) => u.tripCount >= 150 },
-  { id: 'trip_200', title: 'Bicentenaire 🏛️', description: 'Termine 200 trajets.', condition: (u: User) => u.tripCount >= 200 },
-  { id: 'points_120', title: 'Super Cent 🦸', description: 'Atteins un score actuel de 120 points.', condition: (u: User) => u.points >= 120 },
-  { id: 'points_180', title: 'Demi-Tour ↩️', description: 'Atteins un score actuel de 180 points.', condition: (u: User) => u.points >= 180 },
-  { id: 'streak_40', title: 'Quarantaine Rugissante 🐯', description: 'Réussis 40 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 40 },
-  { id: 'streak_60', title: 'Soixante Solide 🗿', description: 'Réussis 60 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 60 },
-  { id: 'distance_3000', title: 'Transcontinental 🚂', description: 'Parcours un total de 3000 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 3000 },
-  { id: 'distance_5000', title: '5K Run 🏃‍♂️', description: 'Parcours un total de 5000 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 5000 },
-  { id: 'total_750', title: 'Investisseur 💼', description: 'Gagne un total de 750 points (cumulés).', condition: (u: User) => u.totalEarned >= 750 },
-  { id: 'total_1000', title: 'Kilo-Point ⚖️', description: 'Gagne un total de 1000 points (cumulés).', condition: (u: User) => u.totalEarned >= 1000 },
-
-  // New - Godlike (Extreme)
-  { id: 'trip_300', title: 'Spartiate ⚔️', description: 'Termine 300 trajets.', condition: (u: User) => u.tripCount >= 300 },
-  { id: 'points_250', title: 'Quart de Mille 🏁', description: 'Atteins un score actuel de 250 points.', condition: (u: User) => u.points >= 250 },
-  { id: 'streak_75', title: 'Diamant Brut 💎', description: 'Réussis 75 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 75 },
-  { id: 'streak_100', title: 'Siècle Parfait 💯', description: 'Réussis 100 passages d\'affilée sans erreur.', condition: (u: User) => u.streak >= 100 },
-  { id: 'distance_10000', title: 'Tour du Monde 🌏', description: 'Parcours un total de 10000 km.', condition: (u: User) => (u.totalDistanceKm || 0) >= 10000 },
+  // Legendary (49-50)
+  { id: '49', title: 'Dieu du Rail ⚡', description: 'Atteins 1000 points.', rarity: 'Legendary', condition: (u: User, trips: Trip[]) => u.points >= 1000 },
+  { id: '50', title: 'Routier Extrême 🚛', description: '250 trajets.', rarity: 'Legendary', condition: (u: User, trips: Trip[]) => u.tripCount >= 250 },
+  
+  // Secret (51-60)
+  { id: '51', title: 'Le Fantôme 👻', description: 'Joue entre 3h00 et 3h59 du matin.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => {
+    const h = new Date().getHours();
+    return h === 3;
+  }},
+  { id: '52', title: 'Dévoué 📱', description: 'Joue 7 jours d\'affilée.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => {
+    const days = [...new Set(trips.map(t => new Date(t.date).toDateString()))].map(d => new Date(d).getTime()).sort((a,b) => a-b);
+    let maxStreak = 0;
+    let currentStreak = 1;
+    for (let i = 1; i < days.length; i++) {
+      if (days[i] - days[i-1] <= 24 * 60 * 60 * 1000 * 1.5) { // 1.5 days to account for DST/time changes
+        currentStreak++;
+      } else {
+        currentStreak = 1;
+      }
+      maxStreak = Math.max(maxStreak, currentStreak);
+    }
+    return maxStreak >= 7;
+  }},
+  { id: '53', title: 'Malchanceux 🌧️', description: 'Perds 3 fois dans la même journée.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => {
+    const lossesByDay = trips.filter(t => !t.success).reduce((acc, t) => {
+      const day = new Date(t.date).toDateString();
+      acc[day] = (acc[day] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.values(lossesByDay).some(count => count >= 3);
+  }},
+  { id: '54', title: 'Saute-Frontière 🛂', description: 'Traverse une frontière nationale.', rarity: 'Secret', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => t.startCountry && t.endCountry && t.startCountry !== t.endCountry);
+  }},
+  { id: '55', title: 'Explorateur 🧭', description: '10 pays différents.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => {
+    const countries = new Set(trips.flatMap(t => [t.startCountry, t.endCountry]).filter(Boolean));
+    return countries.size >= 10;
+  }},
+  { id: '56', title: 'Saute-Île 🏝️', description: 'Passe sur une île.', rarity: 'Secret', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => t.startIsland || t.endIsland);
+  }},
+  { id: '57', title: 'Plongeur 🕳️', description: 'Passe sous le niveau de la mer.', rarity: 'Secret', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => (t.minElevation || 0) < 0);
+  }},
+  { id: '58', title: 'Grand Traverseur 🏗️', description: 'Passe sur un pont de plus de 1km.', rarity: 'Secret', condition: async (u: User, trips: Trip[]) => {
+    return trips.some(t => (t.maxBridgeLength || 0) > 1);
+  }},
+  { id: '59', title: 'L\'Habitant 🏡', description: '50 trajets dans le même pays.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => {
+    const countryCounts = trips.reduce((acc, t) => {
+      if (t.startCountry) acc[t.startCountry] = (acc[t.startCountry] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.values(countryCounts).some(c => c >= 50);
+  }},
+  { id: '60', title: 'Maître de Tout 🏆', description: 'Déverrouille les 59 autres succès.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => (u.achievements?.length || 0) >= 59 },
 ];
 
 export class AchievementEngine {
   /**
    * Checks if the user has unlocked any new achievements based on their current state.
    */
+  static async cleanupInvalidAchievements(userId: number) {
+    const unlocked = await db.achievements.where('userId').equals(userId).toArray();
+    const validAchievementIds = new Set(ACHIEVEMENTS.map(a => a.id));
+    
+    for (const ach of unlocked) {
+      if (!validAchievementIds.has(ach.achievementId)) {
+        await db.achievements.delete(ach.id!);
+      }
+    }
+  }
+
   static async check(user: User) {
     if (!user.id) return;
 
     const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
     const unlockedIds = new Set(unlocked.map(a => a.achievementId));
+    const newlyUnlocked = [];
+
+    const userTrips = await db.trips.where('userId').equals(user.id).toArray();
 
     for (const ach of ACHIEVEMENTS) {
-      if (!unlockedIds.has(ach.id) && ach.condition(user)) {
+      if (!unlockedIds.has(ach.id) && await ach.condition(user, userTrips)) {
         // Unlock new achievement
         await db.achievements.add({
           userId: user.id,
           achievementId: ach.id,
           unlockedAt: Date.now(),
         });
+        newlyUnlocked.push(ach);
+      }
+    }
 
-        // Show Toast
-        useToastStore.getState().addToast({
-          title: 'Succès Déverrouillé!',
-          message: ach.title,
-          type: 'achievement',
+    if (newlyUnlocked.length === 1) {
+      useToastStore.getState().addToast({
+        title: 'Succès Déverrouillé!',
+        message: newlyUnlocked[0].title,
+        type: 'achievement',
+      });
+    } else if (newlyUnlocked.length > 1) {
+      useToastStore.getState().addToast({
+        title: 'Pluie de Succès! 🏆',
+        message: `${newlyUnlocked.length} succès déverrouillés d'un coup!`,
+        type: 'achievement',
+      });
+    }
+
+    if (newlyUnlocked.length > 0) {
+      try {
+        const { AuthService } = await import('./AuthService');
+        await fetch('/api/users/achievements', {
+          method: 'POST',
+          headers: AuthService.getAuthHeaders(),
+          body: JSON.stringify({
+            achievements: newlyUnlocked.map(a => ({ achievementId: a.id, unlockedAt: Date.now() }))
+          })
+        });
+      } catch (e) {
+        console.error('Failed to sync achievements', e);
+      }
+    }
+  }
+
+  static async syncFromServer(user: User) {
+    if (!user.id || !user.achievements) return;
+    
+    const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
+    const unlockedIds = new Set(unlocked.map(a => a.achievementId));
+    
+    for (const achId of user.achievements) {
+      if (!unlockedIds.has(achId)) {
+        await db.achievements.add({
+          userId: user.id,
+          achievementId: achId,
+          unlockedAt: Date.now(),
         });
       }
     }

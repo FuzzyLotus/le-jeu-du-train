@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { AuthService } from '../services/AuthService';
 import { useToastStore } from '../store/useToastStore';
 import { Button } from '../components/Button';
-import { Train, KeyRound, Mail } from 'lucide-react';
+import { Train, KeyRound, Mail, Eye, EyeOff } from 'lucide-react';
 import clsx from 'clsx';
 
 export function ResetPasswordScreen() {
@@ -12,6 +12,7 @@ export function ResetPasswordScreen() {
   const [recoveryPhrase, setRecoveryPhrase] = useState('');
   const [contactMethod, setContactMethod] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   
@@ -107,13 +108,23 @@ export function ResetPasswordScreen() {
                     onChange={(e) => setRecoveryPhrase(e.target.value)}
                     className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
-                  <input
-                    type="password"
-                    placeholder="Nouveau mot de passe"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Nouveau mot de passe"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 pr-12 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
+                      title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
                   <Button 
                     type="submit" 
                     disabled={!username || !recoveryPhrase || !newPassword || isLoading}

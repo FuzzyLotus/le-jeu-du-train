@@ -1,26 +1,54 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Medal, CheckCircle2, X, Lock } from 'lucide-react';
+import { ArrowLeft, Trophy, CheckCircle2, X, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
 import { useAuthStore } from '../store/useAuthStore';
-import { ACHIEVEMENTS } from '../services/AchievementEngine';
+import { ACHIEVEMENTS, AchievementEngine } from '../services/AchievementEngine';
 import clsx from 'clsx';
 
 export function AchievementsScreen() {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.currentUser);
-  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  
+  const unlocked = useLiveQuery(async () => {
+    if (!currentUser?.id) return [];
+    
+    // Cleanup invalid achievements first
+    await AchievementEngine.cleanupInvalidAchievements(currentUser.id);
+    
+    return await db.achievements.where('userId').equals(currentUser.id).toArray();
+  }, [currentUser?.id]);
+
+  const unlockedIds = new Set(unlocked?.map(a => a.achievementId) || []);
   const [selectedAchievement, setSelectedAchievement] = useState<typeof ACHIEVEMENTS[0] | null>(null);
 
-  useEffect(() => {
-    const loadAchievements = async () => {
-      if (!currentUser?.id) return;
-      const unlocked = await db.achievements.where('userId').equals(currentUser.id).toArray();
-      setUnlockedIds(new Set(unlocked.map(a => a.achievementId)));
-    };
-    loadAchievements();
-  }, [currentUser?.id]);
+  const progress = Math.round((unlockedIds.size / ACHIEVEMENTS.length) * 100);
+
+  const getRarityColor = (rarity: string) => {
+    switch (rarity) {
+      case 'Common': return 'bg-slate-500';
+      case 'Uncommon': return 'bg-emerald-500';
+      case 'Rare': return 'bg-blue-500';
+      case 'Very Rare': return 'bg-purple-500';
+      case 'Legendary': return 'bg-yellow-500';
+      case 'Secret': return 'bg-rose-500';
+      default: return 'bg-slate-500';
+    }
+  };
+
+  const getRarityLabel = (rarity: string) => {
+    switch (rarity) {
+      case 'Common': return 'Commun';
+      case 'Uncommon': return 'Peu commun';
+      case 'Rare': return 'Rare';
+      case 'Very Rare': return 'Très rare';
+      case 'Legendary': return 'Légendaire';
+      case 'Secret': return 'Secret';
+      default: return rarity;
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col p-6 max-w-md mx-auto relative">
@@ -32,43 +60,65 @@ export function AchievementsScreen() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <Medal className="w-6 h-6 text-primary" />
-          <h1 className="text-xl font-display text-white">Succès</h1>
+          <Trophy className="w-6 h-6 text-primary" />
+          <h1 className="text-xl font-display text-white">Succès ({unlockedIds.size}/{ACHIEVEMENTS.length})</h1>
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-4 pb-8">
+      <div className="mb-8">
+        <div className="flex justify-between text-xs text-white/50 mb-2 font-bold uppercase tracking-wider">
+          <span>Progression</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-3 bg-surface rounded-full overflow-hidden border border-white/10">
+          <motion.div 
+            className="h-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 pb-8">
         {ACHIEVEMENTS.map((ach) => {
           const isUnlocked = unlockedIds.has(ach.id);
-          // Split by space, assuming the last part is the emoji/icon
+          const isSecret = ach.rarity === 'Secret';
+          
           const parts = ach.title.split(' ');
           const icon = parts.length > 1 ? parts[parts.length - 1] : '🏆';
           const title = parts.length > 1 ? parts.slice(0, -1).join(' ') : ach.title;
+
+          const displayTitle = (isSecret && !isUnlocked) ? 'Succès Secret' : title;
+          const displayIcon = (isSecret && !isUnlocked) ? '❓' : (isUnlocked ? icon : '🔒');
 
           return (
             <button 
               key={ach.id}
               onClick={() => setSelectedAchievement(ach)}
               className={clsx(
-                "flex flex-col items-center justify-center p-6 rounded-3xl border transition-all text-center relative overflow-hidden h-40",
+                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all text-center relative overflow-hidden h-32 group",
                 isUnlocked 
-                  ? "bg-primary/10 border-primary/30 shadow-[0_0_20px_rgba(255,193,7,0.15)] opacity-100 hover:bg-primary/20" 
-                  : "bg-surface border-white/5 opacity-60 grayscale hover:opacity-80 hover:grayscale-0"
+                  ? "bg-surface border-white/10 shadow-lg opacity-100 hover:scale-[1.02]" 
+                  : "bg-surface border-white/5 opacity-40 hover:opacity-60"
               )}
             >
-              {isUnlocked ? (
-                <div className="absolute top-3 right-3">
-                  <CheckCircle2 className="w-4 h-4 text-primary" />
-                </div>
-              ) : (
-                <div className="absolute top-3 right-3">
-                  <Lock className="w-4 h-4 text-white/30" />
-                </div>
-              )}
+              <div className={clsx("absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-tighter text-white/90", getRarityColor(ach.rarity))}>
+                {getRarityLabel(ach.rarity)}
+              </div>
               
-              <span className="text-4xl mb-3 drop-shadow-md">{icon}</span>
-              <span className={clsx("font-bold text-sm leading-tight", isUnlocked ? "text-primary" : "text-white")}>
-                {title}
+              <span className={clsx(
+                "text-3xl mb-2 mt-2 transition-all duration-500",
+                isUnlocked ? "scale-100 filter-none" : "scale-90 grayscale opacity-40"
+              )}>
+                {displayIcon}
+              </span>
+              
+              <span className={clsx(
+                "font-bold text-[10px] leading-tight px-1",
+                isUnlocked ? "text-white" : "text-white/30"
+              )}>
+                {displayTitle}
               </span>
             </button>
           );
@@ -104,24 +154,39 @@ export function AchievementsScreen() {
                   "w-20 h-20 rounded-full flex items-center justify-center mb-6 text-5xl shadow-[0_0_30px_rgba(0,0,0,0.3)]",
                   unlockedIds.has(selectedAchievement.id) ? "bg-primary/20" : "bg-white/5 grayscale"
                 )}>
-                  {selectedAchievement.title.split(' ').pop() || '🏆'}
+                  {selectedAchievement.rarity === 'Secret' && !unlockedIds.has(selectedAchievement.id) 
+                    ? '❓' 
+                    : (selectedAchievement.title.split(' ').pop() || '🏆')}
                 </div>
 
                 <h2 className="font-display text-2xl text-white mb-2">
-                  {selectedAchievement.title.split(' ').slice(0, -1).join(' ')}
+                  {selectedAchievement.rarity === 'Secret' && !unlockedIds.has(selectedAchievement.id)
+                    ? 'Succès Secret'
+                    : selectedAchievement.title.split(' ').slice(0, -1).join(' ')}
                 </h2>
 
-                <div className={clsx(
-                  "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6",
-                  unlockedIds.has(selectedAchievement.id) 
-                    ? "bg-primary/20 text-primary" 
-                    : "bg-white/10 text-white/50"
-                )}>
-                  {unlockedIds.has(selectedAchievement.id) ? "Déverrouillé" : "Verrouillé"}
+                <div className="flex items-center gap-2 mb-6">
+                  <div className={clsx(
+                    "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white",
+                    getRarityColor(selectedAchievement.rarity)
+                  )}>
+                    {getRarityLabel(selectedAchievement.rarity)}
+                  </div>
+                  
+                  <div className={clsx(
+                    "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                    unlockedIds.has(selectedAchievement.id) 
+                      ? "bg-primary/20 text-primary" 
+                      : "bg-white/10 text-white/50"
+                  )}>
+                    {unlockedIds.has(selectedAchievement.id) ? "Déverrouillé" : "Verrouillé"}
+                  </div>
                 </div>
 
                 <p className="text-white/70 leading-relaxed">
-                  {(selectedAchievement as any).description || "Pas de description disponible."}
+                  {selectedAchievement.rarity === 'Secret' && !unlockedIds.has(selectedAchievement.id)
+                    ? "Déverrouille ce succès pour découvrir son secret."
+                    : (selectedAchievement as any).description || "Pas de description disponible."}
                 </p>
               </div>
             </motion.div>

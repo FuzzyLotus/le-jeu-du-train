@@ -16,7 +16,7 @@ export function ToastContainer() {
   };
 
   return (
-    <div className="fixed top-4 left-0 right-0 z-50 flex flex-col items-center gap-2 pointer-events-none px-4">
+    <div className="fixed top-4 left-0 right-0 z-[9999] flex flex-col items-center gap-2 pointer-events-none px-4">
       <AnimatePresence>
         {toasts.map((toast) => (
           <motion.div

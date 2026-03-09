@@ -1,47 +1,55 @@
-# Le Jeu du Train
+# Le Jeu du Train 🚂
 
-Le jeu du train est un jeu sans pitié où le plaisir débute au croisement de la route et de rails de train.
+A multi-user, interactive web application built with React, Express, and SQLite. Track your trips, cross level crossings, earn points, and compete on the leaderboard!
 
-Chaque croisement réussi te donne un point mais un échec te fera perdre l'investissement d'une vie.
+## 🌟 Features
 
-## Features
+- **Live Tracking**: Track your trips in real-time using GPS.
+- **Trip Planner**: Plan routes and estimate level crossings.
+- **Manual Entry**: Log your past trips manually.
+- **Leaderboards**: Compete globally or with friends.
+- **Achievements**: Unlock medals and titles as you play.
+- **Admin Dashboard**: Manage users, monitor activity, and configure the game.
+- **PWA Support**: Install the app on your phone for a native-like experience.
 
-- **Multi-user Support**: Create an account and compete with others.
-- **Leaderboards**: See who has the highest score in real-time.
-- **Game History**: Track your past trips and performance.
-- **Achievements**: Unlock medals as you play.
-- **Admin Dashboard**: Manage announcements and global multipliers.
+## 🛠️ Tech Stack
 
-## Tech Stack
-
-- **Frontend**: React, Tailwind CSS, Lucide Icons, Motion.
+- **Frontend**: React 19, Vite, Tailwind CSS v4, Zustand, Lucide Icons, Motion.
 - **Backend**: Node.js, Express, Better-SQLite3.
 - **Database**: SQLite (Local persistence).
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Local Development
 
-1.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
-2.  **Start the development server**:
-    ```bash
-    npm run dev
-    ```
-3.  **Open the app**: Visit `http://localhost:3000`.
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/le-jeu-du-train.git
+   cd le-jeu-du-train
+   ```
 
-### Versioning & Sync Status
-The app includes a versioning system to help you track updates between AI Studio and Production.
-- **Version Number:** Located in `src/version.ts`.
-- **Sync Status:** Displayed in the Admin Panel to confirm connection to GitHub.
-- **Update Process:** When you push changes from AI Studio, update the `APP_VERSION` and `LAST_SYNC` in `src/version.ts` to keep track of your releases.
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-## Deployment
+3. **Set up environment variables**:
+   Copy the example environment file and configure it:
+   ```bash
+   cp .env.example .env
+   ```
 
-For detailed deployment instructions, see [DEPLOY.md](./DEPLOY.md).
+4. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
 
-## License
+5. **Open the app**: Visit `http://localhost:3000` in your browser.
 
-GPL 3
+## 📦 Deployment
+
+For detailed deployment instructions, including setting up a production server with PM2 and Nginx, see [DEPLOY.md](./DEPLOY.md).
+
+## 📄 License
+
+This project is licensed under the MIT License.

@@ -7,6 +7,15 @@ export interface ProcessedTrip {
   durationMinutes: number;
   crossings: OverpassElement[];
   routeCoordinates: [number, number][]; // [lon, lat]
+  hasBridge: boolean;
+  hasTunnel: boolean;
+  maxElevation: number;
+  minElevation: number;
+  maxBridgeLength: number;
+  startCountry?: string;
+  endCountry?: string;
+  startIsland?: string;
+  endIsland?: string;
 }
 
 export class TripEngine {
@@ -54,13 +63,70 @@ export class TripEngine {
       // 4. Filter crossings that are actually ON the route
       const validCrossings = this.filterCrossingsOnRoute(allCrossings, routeCoordinates);
 
-      // 5. Format the result
+      // 5. Fetch infrastructure (bridges/tunnels)
+      let hasBridge = false;
+      let hasTunnel = false;
+      let maxBridgeLength = 0;
+
+      // Only query infrastructure for reasonable distances to prevent Overpass timeouts
+      if (primaryRoute.distance < 50000) { // < 50km
+        const infraData = await geoServices.getInfrastructureInBBox(bbox);
+        hasBridge = infraData.elements.some(e => e.tags?.bridge);
+        hasTunnel = infraData.elements.some(e => e.tags?.tunnel);
+
+        for (const element of infraData.elements) {
+          if (element.tags?.bridge && element.geometry) {
+            // Calculate length of the way
+            let length = 0;
+            for (let i = 0; i < element.geometry.length - 1; i++) {
+              const p1 = element.geometry[i];
+              const p2 = element.geometry[i + 1];
+              // Simple distance calculation (haversine or just Euclidean for short distances)
+              const dLat = (p2.lat - p1.lat) * 111;
+              const dLon = (p2.lon - p1.lon) * 111 * Math.cos(p1.lat * Math.PI / 180);
+              length += Math.sqrt(dLat * dLat + dLon * dLon);
+            }
+            if (length > maxBridgeLength) maxBridgeLength = length;
+          }
+        }
+      }
+
+      // 6. Estimate max/min elevation
+      let maxElevation = 0;
+      let minElevation = 10000;
+
+      // Sample max 20 points for elevation to prevent rate limits
+      const step = Math.max(1, Math.floor(routeCoordinates.length / 20));
+      const sampleCoords = [];
+      for (let i = 0; i < routeCoordinates.length; i += step) {
+        sampleCoords.push(routeCoordinates[i]);
+      }
+
+      const elevations = await geoServices.getElevationsBatch(sampleCoords);
+      for (const elevation of elevations) {
+        if (elevation > maxElevation) maxElevation = elevation;
+        if (elevation < minElevation) minElevation = elevation;
+      }
+
+      // 7. Format the result
+      const startAddress = await geoServices.reverseGeocode(Number(start.lat), Number(start.lon));
+      const endAddress = await geoServices.reverseGeocode(Number(end.lat), Number(end.lon));
+
       return {
         routeName: `${this.formatAddress(start.display_name)} ➔ ${this.formatAddress(end.display_name)}`,
         distanceKm: primaryRoute.distance / 1000,
         durationMinutes: Math.round(primaryRoute.duration / 60),
         crossings: validCrossings,
-        routeCoordinates: routeCoordinates
+        routeCoordinates: routeCoordinates,
+        hasBridge,
+        hasTunnel,
+        maxElevation,
+        minElevation,
+        maxBridgeLength,
+        startCountry: startAddress.address?.country,
+        endCountry: endAddress.address?.country,
+        startIsland: startAddress.address?.island,
+        endIsland: endAddress.address?.island
       };
 
     } catch (error) {

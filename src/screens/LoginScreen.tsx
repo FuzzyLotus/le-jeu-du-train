@@ -5,11 +5,12 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
 import { Button } from '../components/Button';
 import { APP_VERSION } from '../version';
-import { Train, Terminal } from 'lucide-react';
+import { Train, Terminal, Eye, EyeOff } from 'lucide-react';
 
 export function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const navigate = useNavigate();
@@ -52,13 +53,21 @@ export function LoginScreen() {
           />
           <div className="relative">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Mot de passe"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 pr-24 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="text-white/40 hover:text-white/70 transition-colors"
+                title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
               <Link to="/reset-password" className="text-xs text-primary hover:underline">
                 Oublié?
               </Link>

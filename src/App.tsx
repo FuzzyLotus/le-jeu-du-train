@@ -5,6 +5,7 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from './components/ToastContainer';
+import { MainLayout } from './components/layout/MainLayout';
 import { useAuthStore } from './store/useAuthStore';
 import { LoginScreen } from './screens/LoginScreen';
 import { SignupScreen } from './screens/SignupScreen';
@@ -20,9 +21,13 @@ import { FeedbackScreen } from './screens/FeedbackScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { PublicProfileScreen } from './screens/PublicProfileScreen';
 import { FriendsScreen } from './screens/FriendsScreen';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const currentUser = useAuthStore((state) => state.currentUser);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  
+  if (isLoading) return <div>Loading...</div>;
   if (!currentUser) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
@@ -31,88 +36,33 @@ export default function App() {
   return (
     <BrowserRouter>
       <ToastContainer />
+      <PwaInstallPrompt />
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/signup" element={<SignupScreen />} />
         <Route path="/reset-password" element={<ResetPasswordScreen />} />
         <Route path="/privacy" element={<PrivacyPolicyScreen />} />
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute>
-              <HomeScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/planner" 
-          element={
-            <ProtectedRoute>
-              <TripPlannerScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/leaderboard" 
-          element={
-            <ProtectedRoute>
-              <LeaderboardScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/achievements" 
-          element={
-            <ProtectedRoute>
-              <AchievementsScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/history" 
-          element={
-            <ProtectedRoute>
-              <HistoryScreen />
-            </ProtectedRoute>
-          } 
-        />
+        
+        {/* Main App Layout */}
+        <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+          <Route path="/" element={<HomeScreen />} />
+          <Route path="/planner" element={<TripPlannerScreen />} />
+          <Route path="/leaderboard" element={<LeaderboardScreen />} />
+          <Route path="/achievements" element={<AchievementsScreen />} />
+          <Route path="/history" element={<HistoryScreen />} />
+          <Route path="/feedback" element={<FeedbackScreen />} />
+          <Route path="/settings" element={<SettingsScreen />} />
+          <Route path="/profile/:userId" element={<PublicProfileScreen />} />
+          <Route path="/profile/me" element={<PublicProfileScreen isMe />} />
+          <Route path="/friends" element={<FriendsScreen />} />
+        </Route>
+
+        {/* Admin Route (Standalone) */}
         <Route 
           path="/admin" 
           element={
             <ProtectedRoute>
               <AdminScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/feedback" 
-          element={
-            <ProtectedRoute>
-              <FeedbackScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/settings" 
-          element={
-            <ProtectedRoute>
-              <SettingsScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/profile/:userId" 
-          element={
-            <ProtectedRoute>
-              <PublicProfileScreen />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/friends" 
-          element={
-            <ProtectedRoute>
-              <FriendsScreen />
             </ProtectedRoute>
           } 
         />

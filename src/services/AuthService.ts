@@ -1,4 +1,6 @@
 import type { User } from '../types/models';
+import { AchievementEngine } from './AchievementEngine';
+import { db } from '../db/database';
 
 export class AuthService {
   static getToken(): string | null {
@@ -18,6 +20,19 @@ export class AuthService {
     return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
   }
 
+  static async syncTripsFromServer(): Promise<void> {
+    try {
+      const response = await fetch('/api/history', { headers: this.getAuthHeaders() });
+      if (response.ok) {
+        const trips = await response.json();
+        await db.trips.clear(); // Clear local cache
+        await db.trips.bulkAdd(trips); // Populate with server truth
+      }
+    } catch (e) {
+      console.error('Failed to sync trips', e);
+    }
+  }
+
   /**
    * Register a new user
    */
@@ -35,6 +50,10 @@ export class AuthService {
 
     const data = await response.json();
     if (data.token) this.setToken(data.token);
+    if (data.user) {
+      await AchievementEngine.syncFromServer(data.user);
+      await this.syncTripsFromServer();
+    }
     return data.user;
   }
 
@@ -55,6 +74,10 @@ export class AuthService {
 
     const data = await response.json();
     if (data.token) this.setToken(data.token);
+    if (data.user) {
+      await AchievementEngine.syncFromServer(data.user);
+      await this.syncTripsFromServer();
+    }
     return data.user;
   }
 
@@ -131,7 +154,10 @@ export class AuthService {
       throw new Error(error.error || 'Erreur lors de la mise à jour');
     }
 
-    return response.json();
+    const user = await response.json();
+    await AchievementEngine.syncFromServer(user);
+    await this.syncTripsFromServer();
+    return user;
   }
 
   static async getMe(): Promise<User> {
@@ -144,6 +170,9 @@ export class AuthService {
       throw new Error(error.error || 'Erreur lors de la récupération du profil');
     }
 
-    return response.json();
+    const user = await response.json();
+    await AchievementEngine.syncFromServer(user);
+    await this.syncTripsFromServer();
+    return user;
   }
 }

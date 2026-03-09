@@ -113,7 +113,7 @@ export function TripPlannerScreen() {
     const effectivePoints = calculateEffectivePoints(results);
 
     try {
-      const updatedUser = await GameService.submitScore(effectivePoints, trip.distanceKm, trip.crossings.length, tripFailed);
+      const updatedUser = await GameService.submitScore(trip.distanceKm, trip.crossings.length, tripFailed);
 
       if (effectivePoints > 0) {
         triggerConfetti();
@@ -136,6 +136,15 @@ export function TripPlannerScreen() {
         crossingsCount: trip.crossings.length,
         success: !tripFailed,
         date: Date.now(),
+        hasBridge: trip.hasBridge,
+        hasTunnel: trip.hasTunnel,
+        maxElevation: trip.maxElevation,
+        minElevation: trip.minElevation,
+        maxBridgeLength: trip.maxBridgeLength,
+        startCountry: trip.startCountry,
+        endCountry: trip.endCountry,
+        startIsland: trip.startIsland,
+        endIsland: trip.endIsland,
       });
 
       setCurrentUser(updatedUser);

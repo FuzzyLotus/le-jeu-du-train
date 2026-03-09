@@ -1,1 +1,21 @@
-{\n  "name": "Le Jeu du Train",\n  "short_name": "Train Game",\n  "description": "A gamified travel tracker where users earn points by lifting their legs at railroad crossings.",\n  "start_url": "/",\n  "scope": "/",\n  "display": "standalone",\n  "orientation": "portrait-primary",\n  "background_color": "#ffffff",\n  "theme_color": "#1f2937",\n  "icons": [\n    {\n      "src": "/icons/icon-192x192.png",\n      "sizes": "192x192",\n      "type": "image/png",\n      "purpose": "any"\n    },\n    {\n      "src": "/icons/icon-512x512.png",\n      "sizes": "512x512",\n      "type": "image/png",\n      "purpose": "any"\n    },\n    {\n      "src": "/icons/icon-maskable-192x192.png",\n      "sizes": "192x192",\n      "type": "image/png",\n      "purpose": "maskable"\n    },\n    {\n      "src": "/icons/icon-maskable-512x512.png",\n      "sizes": "512x512",\n      "type": "image/png",\n      "purpose": "maskable"\n    }\n  ],\n  "categories": ["games"],\n  "screenshots": [\n    {\n      "src": "/screenshots/screenshot-540x720.png",\n      "sizes": "540x720",\n      "type": "image/png"\n    },\n    {\n      "src": "/screenshots/screenshot-1080x1440.png",\n      "sizes": "1080x1440",\n      "type": "image/png"\n    }\n  ],\n  "shortcuts": [\n    {\n      "name": "Play Game",\n      "short_name": "Play",\n      "description": "Start playing Le Jeu du Train",\n      "url": "/game",\n      "icons": [\n        {\n          "src": "/icons/icon-192x192.png",\n          "sizes": "192x192"\n        }\n      ]\n    },\n    {\n      "name": "View Leaderboard",\n      "short_name": "Leaderboard",\n      "description": "Check the global leaderboard",\n      "url": "/leaderboard",\n      "icons": [\n        {\n          "src": "/icons/icon-192x192.png",\n          "sizes": "192x192"\n        }\n      ]\n    }\n  ]\n}
+{
+  "name": "Le Jeu du Train",
+  "short_name": "Jeu du Train",
+  "description": "Le jeu multijoueur pour ne plus s'ennuyer en voiture.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#F27D26",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/train/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/train/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
