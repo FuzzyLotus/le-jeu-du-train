@@ -2,11 +2,11 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
-import { db } from './server/db';
+import { db } from './server/db.ts';
 
-import authRouter from './server/routes/auth';
-import gameRouter from './server/routes/game';
-import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils';
+import authRouter from './server/routes/auth.ts';
+import gameRouter from './server/routes/game.ts';
+import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
