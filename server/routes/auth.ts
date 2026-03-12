@@ -1,8 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../db';
-import { authLimiter, safeJsonParse } from '../utils';
+import { db } from '../db.js';
+import { authLimiter, safeJsonParse } from '../utils.js';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-le-jeu-du-train-12345';

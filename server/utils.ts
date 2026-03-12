@@ -1,4 +1,4 @@
-import { db } from './db';
+import { db } from './db.js';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 
@@ -34,14 +34,10 @@ export const authLimiter = rateLimit({
 export const gameSubmitLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  keyGenerator: (req: any) => {
-    if (req.user && req.user.id) {
-      return req.user.id.toString();
-    }
-    return req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  },
+  // Only runs on authenticated routes, req.user.id is always present
+  keyGenerator: (req: any) => req.user.id.toString(),
   message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' },
-  validate: { xForwardedForHeader: false }
+  validate: { xForwardedForHeader: false, trustProxy: false }
 });
 
 export const safeJsonParse = (str: string | null) => {

@@ -1,26 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "experimentalDecorators": true,
-    "useDefineForClassFields": false,
-    "module": "ESNext",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "allowJs": true,
-    "jsx": "react-jsx",
-    "paths": {
-      "@/*": [
-        "./*"
-      ]
-    },
-    "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "target": "ES2022",                       // modern JavaScript output
+    "module": "NodeNext",                      // required for Node 24 ESM
+    "moduleResolution": "NodeNext",           // resolves imports like Node would
+    "esModuleInterop": true,                  // allows default imports from CommonJS
+    "forceConsistentCasingInFileNames": true, // avoids file casing issues
+    "strict": true,                            // enable all strict type checks
+    "noEmit": true,                            // do not output compiled files (used with ts-node or build scripts)
+    "skipLibCheck": true,                      // speeds up compilation by skipping type checks for node_modules
+    "resolveJsonModule": true,                 // allows importing JSON files
+    "allowSyntheticDefaultImports": true,      // allow default imports from modules without default export
+    "strictPropertyInitialization": false,     // optional: avoids issues with class property initialization
+    "allowJs": true                             // allows importing JS files directly
+  },
+  "include": ["./server/**/*.ts", "./server/**/*.js"], // include all TS and JS source files
+  "exclude": ["node_modules", "dist"]                  // ignore build and dependencies
 }
