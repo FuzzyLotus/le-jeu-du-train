@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "node --experimental-strip-types server.ts",
+    "start": "node --experimental-strip-types --experimental-transform-types server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
