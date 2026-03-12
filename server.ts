@@ -7,11 +7,11 @@ import jwt from 'jsonwebtoken';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
-import { db } from './server/db';
+import { db } from './server/db.js';
 
-import authRouter from './server/routes/auth';
-import gameRouter from './server/routes/game';
-import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils';
+import authRouter from './server/routes/auth.js';
+import gameRouter from './server/routes/game.js';
+import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
