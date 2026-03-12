@@ -1,26 +1,25 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "module": "Node16",                     // allows import.meta and Node-style imports
+    "moduleResolution": "Node16",           // resolves node_modules properly
+    "esModuleInterop": true,                // fixes default import errors (express, fs, path, bcryptjs, jsonwebtoken, etc.)
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,                   // prevents type errors in node_modules
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "module": "ESNext",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "isolatedModules": true,
-    "moduleDetection": "force",
+    "isolatedModules": false,               // backend doesn't need React-style isolatedModules
     "allowJs": true,
-    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    "noEmit": false,                        // backend needs JS output
+    "outDir": "dist",
     "paths": {
       "@/*": [
         "./*"
       ]
-    },
-    "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    }
+  },
+  "include": ["server.ts", "server/**/*.ts"],
+  "exclude": ["node_modules"]
 }
