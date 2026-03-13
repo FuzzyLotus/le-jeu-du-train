@@ -148,7 +148,7 @@ export class AuthService {
    * Get all pending password reset requests (Admin only)
    */
   static async getResetRequests(): Promise<any[]> {
-    const response = await fetch(`/api/admin/reset-requests`, {
+    const response = await fetch('/api/admin/reset-requests', {
       headers: this.getAuthHeaders()
     });
     if (!response.ok) {
