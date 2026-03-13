@@ -51,6 +51,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
 
   useEffect(() => {
     const loadProfile = async () => {
+      console.log('loadProfile called', { isAuthLoading, currentUserId: currentUser?.id });
       if (isAuthLoading) {
         return;
       }
@@ -72,16 +73,19 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
       if (targetUserId === currentUser.id) {
         // Load own profile from API to get accurate recent trips
         try {
-          const response = await fetch(`/api/users/${targetUserId}`, {
+          const response = await fetch(`/api/users/me`, {
             headers: AuthService.getAuthHeaders()
           });
           if (response.ok) {
             const data = await response.json();
-            setUser(data.user);
+            console.log('data received', data);  // inspect
+            // Accept both wrapped ({ user, achievements, recentTrips }) and direct user object
+            setUser(data?.user ?? data);
             setFriendStatus('self');
-            setRecentTrips(data.recentTrips);
-            setAchievements(new Set(data.achievements));
+            setRecentTrips(data.recentTrips ?? data.recentTrips ?? []);
+            setAchievements(new Set(data.achievements ?? []));
           } else {
+            console.log('response not ok', response.status);  // add this
             addToast({ title: 'Erreur', message: 'Impossible de charger le profil.', type: 'error' });
             navigate('/');
           }
@@ -110,10 +114,10 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         }
 
         const data = await response.json();
-        setUser(data.user);
-        setFriendStatus(data.friendStatus);
-        setRecentTrips(data.recentTrips);
-        setAchievements(new Set(data.achievements));
+        setUser(data?.user ?? data);
+        setFriendStatus(data.friendStatus ?? data.friendStatus ?? 'none');
+        setRecentTrips(data.recentTrips ?? []);
+        setAchievements(new Set(data.achievements ?? []));
 
       } catch (error) {
         addToast({ title: 'Erreur', message: 'Impossible de charger le profil.', type: 'error' });
@@ -124,7 +128,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
     };
 
     loadProfile();
-  }, [userId, isMe, currentUser, navigate, addToast, isAuthLoading]);
+  }, [userId, isMe, currentUser?.id, isAuthLoading]);
 
   const handleSendRequest = async () => {
     if (!currentUser?.id || !user?.id) return;

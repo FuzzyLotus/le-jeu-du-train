@@ -6,6 +6,7 @@ import { db } from './server/db.js';
 
 import authRouter from './server/routes/auth.js';
 import gameRouter from './server/routes/game.js';
+import usersRouter from './server/routes/users.js';
 import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,8 +38,14 @@ async function startServer() {
   // ========================
   app.use('/api/auth', authRouter);
   app.use('/api/game', gameRouter);
+  // Testing log to verify users router is hit
+  app.use('/api/users', (req, res, next) => {
+    console.log('Users router hit:', req.method, req.url);
+    next();
+  });
+  app.use('/api/users', usersRouter);
 
-  app.post('/api/game/submit', requireAuth, gameSubmitLimiter, (req: any, res: any) => {
+  /*app.post('/api/game/submit', requireAuth, gameSubmitLimiter, (req: any, res: any) => {
     const { score, distanceKm, crossings, isFailed, tripCount = 1 } = req.body;
     const userId = req.user.id;
 
@@ -110,9 +117,9 @@ async function startServer() {
       console.error('Submit game error:', err.message);
       res.status(500).json({ error: 'Erreur lors de la sauvegarde de la partie.' });
     }
-  });
+  }); */
 
-  app.get('/api/users/me', requireAuth, (req: any, res: any) => {
+  /* app.get('/api/users/me', requireAuth, (req: any, res: any) => {
     try {
       const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
       if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé' });
@@ -141,22 +148,22 @@ async function startServer() {
       console.error('Get me error:', err.message);
       res.status(500).json({ error: 'Erreur serveur' });
     }
-  });
+  }); */
 
   // ========================
   // Static + SPA Fallback (must be AFTER all API routes)
   // ========================
   app.use(express.static(path.join(__dirname, 'dist')));
 
-  app.get('/{*path}', (req, res) => {
+  app.get('/{*meow}', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
 
   // ========================
   // Start server
   // ========================
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
 

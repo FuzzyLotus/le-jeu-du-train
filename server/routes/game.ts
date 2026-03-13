@@ -1,6 +1,6 @@
 import express from 'express';
-import { db } from '../db';
-import { requireAuth, gameSubmitLimiter, safeJsonParse } from '../utils';
+import { db } from '../db.js';
+import { requireAuth, gameSubmitLimiter, safeJsonParse } from '../utils.js';
 
 const router = express.Router();
 
@@ -126,4 +126,24 @@ router.get('/history', requireAuth, (req: any, res: any) => {
   }
 });
 
+// Leaderboard route
+router.get('/leaderboard', requireAuth, (req: any, res: any) => {
+  try {
+    const users = db.prepare(`
+      SELECT id, username, display_name, points, total_earned, trip_count, 
+             streak, longest_trip_km, total_distance_km, highest_score
+      FROM users
+      WHERE is_admin = 0
+      ORDER BY points DESC
+      LIMIT 100
+    `).all();
+
+    res.json(users);
+  } catch (error: any) {
+    console.error('Leaderboard error:', error.message);
+    res.status(500).json({ error: 'Erreur lors de la récupération du classement.' });
+  }
+});
+
 export default router;
+

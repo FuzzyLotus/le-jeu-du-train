@@ -17,12 +17,15 @@ export class AuthService {
 
   static getAuthHeaders(): HeadersInit {
     const token = this.getToken();
-    return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-  }
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
+ }
 
   static async syncTripsFromServer(): Promise<void> {
     try {
-      const response = await fetch('/api/history', { headers: this.getAuthHeaders() });
+      const response = await fetch('/api/game/history', { headers: this.getAuthHeaders() });
       if (response.ok) {
         const trips = await response.json();
         await db.trips.clear(); // Clear local cache
@@ -81,8 +84,16 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Erreur lors de la connexion');
+      let errorMessage = `Erreur ${response.status}`;
+
+      try {
+        const error = await response.json();
+        errorMessage = error.error || errorMessage;
+      } catch (e) {
+        console.error('Failed to parse error JSON', e);
+      }
+
+      throw new Error(errorMessage);
     }
 
     const text = await response.text();
@@ -92,7 +103,7 @@ export class AuthService {
     } catch (e) {
       throw new Error('Réponse serveur invalide');
     }
-    
+
     if (data.token) this.setToken(data.token);
     if (data.user) {
       await AchievementEngine.syncFromServer(data.user);
@@ -203,7 +214,9 @@ export class AuthService {
       throw new Error(error.error || 'Erreur lors de la récupération du profil');
     }
 
-    const user = await response.json();
+    const data = await response.json();
+    // API sometimes wraps the user under a `user` key (server returns { user, achievements, recentTrips })
+    const user = data?.user ?? data;
     await AchievementEngine.syncFromServer(user);
     await this.syncTripsFromServer();
     return user;

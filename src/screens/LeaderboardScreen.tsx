@@ -19,7 +19,7 @@ export function LeaderboardScreen() {
     const loadData = async () => {
       try {
         const [leaderboardRes, friendsRes] = await Promise.all([
-          fetch('/api/leaderboard', { headers: AuthService.getAuthHeaders() }),
+          fetch('/api/game/leaderboard', { headers: AuthService.getAuthHeaders() }),
           fetch('/api/friends', { headers: AuthService.getAuthHeaders() })
         ]);
 

@@ -16,7 +16,7 @@ export function HistoryScreen() {
     const loadHistory = async () => {
       if (!currentUser?.id) return;
       try {
-        const response = await fetch('/api/history', {
+        const response = await fetch('/api/game/history', {
           headers: AuthService.getAuthHeaders()
         });
         if (response.ok) {
