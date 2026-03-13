@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
 import { Button } from '../components/Button';
 import clsx from 'clsx';
-import type { FeedbackStatus, FeedbackReply, User, Trip } from '../types/models';
+import type { Feedback, FeedbackStatus, FeedbackReply, User, Trip } from '../types/models';
 import { ACHIEVEMENTS } from '../services/AchievementEngine';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { AuthService } from '../services/AuthService';
@@ -139,7 +139,25 @@ export function AdminScreen() {
     if (activeTab === 'users' || activeTab === 'monitoring') {
       loadUsers();
     }
+    if (activeTab === 'feedback') {
+      loadFeedback();
+    }
   }, [activeTab]);
+
+  const loadFeedback = async () => {
+    try {
+      setLoadingFeedback(true);
+      const response = await fetch('/api/admin/feedback', { headers: AuthService.getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setFeedback(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingFeedback(false);
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -157,7 +175,8 @@ export function AdminScreen() {
   };
   const trips = useLiveQuery(() => db.trips.reverse().limit(100).toArray()); // Last 100 trips for moderation
   const allTrips = useLiveQuery(() => db.trips.toArray()); // All trips for analytics
-  const feedback = useLiveQuery(() => db.feedback.reverse().sortBy('createdAt'));
+  const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
   const myAchievements = useLiveQuery(
     () => currentUser?.id ? db.achievements.where('userId').equals(currentUser.id).toArray() : [],
     [currentUser?.id]
@@ -284,11 +303,21 @@ export function AdminScreen() {
 
   const handleUpdateStatus = async (id: number, status: FeedbackStatus) => {
     try {
-      await db.feedback.update(id, { status, updatedAt: Date.now() });
+      const response = await fetch(`/api/admin/feedback/${id}`, {
+        method: 'PATCH',
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to update');
+      }
+      const updated = await response.json();
+      setFeedback(prev => prev.map(f => f.id === id ? { ...f, ...updated } : f));
       addToast({ title: 'Succès', message: 'Statut mis à jour.', type: 'success' });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      addToast({ title: 'Erreur', message: 'Impossible de mettre à jour le statut.', type: 'error' });
+      addToast({ title: 'Erreur', message: error.message || 'Impossible de mettre à jour le statut.', type: 'error' });
     }
   };
 
@@ -296,28 +325,22 @@ export function AdminScreen() {
     if (!currentUser?.id || !replyText[feedbackId]?.trim()) return;
 
     try {
-      const item = await db.feedback.get(feedbackId);
-      if (!item) return;
-
-      const newReply: FeedbackReply = {
-        senderId: currentUser.id,
-        isAdmin: true,
-        message: replyText[feedbackId].trim(),
-        createdAt: Date.now()
-      };
-
-      const updatedReplies = [...(item.replies || []), newReply];
-      
-      await db.feedback.update(feedbackId, { 
-        replies: updatedReplies,
-        updatedAt: Date.now()
+      const response = await fetch(`/api/admin/feedback/${feedbackId}/reply`, {
+        method: 'POST',
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: replyText[feedbackId].trim() })
       });
-
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to reply');
+      }
+      const updated = await response.json();
+      setFeedback(prev => prev.map(f => f.id === feedbackId ? { ...f, ...updated } : f));
       setReplyText(prev => ({ ...prev, [feedbackId]: '' }));
       addToast({ title: 'Envoyé!', message: 'Réponse ajoutée.', type: 'success' });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      addToast({ title: 'Erreur', message: "Impossible d'envoyer la réponse.", type: 'error' });
+      addToast({ title: 'Erreur', message: error.message || "Impossible d'envoyer la réponse.", type: 'error' });
     }
   };
 
@@ -834,7 +857,12 @@ export function AdminScreen() {
 
       {activeTab === 'feedback' && (
         <div className="flex flex-col gap-4">
-          {feedback?.map((item) => (
+          {loadingFeedback ? (
+            <div className="flex items-center justify-center py-12 text-white/50">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          ) : (
+          feedback?.map((item) => (
             <div key={item.id} className="bg-surface border border-white/5 rounded-3xl p-6">
               <div 
                 className="flex items-start justify-between mb-3 cursor-pointer"
@@ -958,9 +986,9 @@ export function AdminScreen() {
                 </button>
               </div>
             </div>
-          ))}
+          )))}
 
-          {feedback?.length === 0 && (
+          {!loadingFeedback && feedback?.length === 0 && (
             <div className="text-center text-white/50 py-8 bg-surface border border-white/5 rounded-3xl">
               Aucun retour pour le moment.
             </div>

@@ -4,6 +4,27 @@ import { requireAuth, safeJsonParse } from '../utils.js';
 
 const router = express.Router();
 
+function sessionToTrip(session: any) {
+  return {
+    id: session.id,
+    userId: session.user_id,
+    routeName: 'Trajet',
+    distanceKm: session.distance_km ?? 0,
+    crossingsCount: session.crossings ?? 0,
+    success: (session.score ?? 0) > 0,
+    date: session.ended_at,
+    hasBridge: session.has_bridge === 1,
+    hasTunnel: session.has_tunnel === 1,
+    maxElevation: session.max_elevation,
+    minElevation: session.min_elevation,
+    maxBridgeLength: session.max_bridge_length,
+    startCountry: session.start_country,
+    endCountry: session.end_country,
+    startIsland: session.start_island,
+    endIsland: session.end_island,
+  };
+}
+
 // GET /api/users/me
 router.get('/me', requireAuth, (req: any, res: any) => {
   try {
@@ -13,9 +34,9 @@ router.get('/me', requireAuth, (req: any, res: any) => {
     const achievementIds = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?')
       .all(user.id).map((a: any) => a.achievement_id);
 
-    const recentTrips = db.prepare(`
+    const sessions = db.prepare(`
       SELECT * FROM game_sessions WHERE user_id = ? ORDER BY ended_at DESC LIMIT 10
-    `).all(user.id);
+    `).all(user.id) as any[];
 
     res.json({
       user: {
@@ -36,7 +57,7 @@ router.get('/me', requireAuth, (req: any, res: any) => {
         homeLocation: safeJsonParse(user.home_location),
       },
       achievements: achievementIds,
-      recentTrips
+      recentTrips: sessions.map(sessionToTrip),
     });
   } catch (err: any) {
     console.error('Get me error:', err.message);
@@ -93,6 +114,7 @@ router.put('/me', requireAuth, (req: any, res: any) => {
 // GET /api/users/:id
 router.get('/:id', requireAuth, (req: any, res: any) => {
   try {
+    const currentUserId = req.user.id;
     const targetId = parseInt(req.params.id);
     if (isNaN(targetId)) return res.status(400).json({ error: 'ID invalide' });
 
@@ -102,9 +124,21 @@ router.get('/:id', requireAuth, (req: any, res: any) => {
     const achievementIds = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?')
       .all(user.id).map((a: any) => a.achievement_id);
 
-    const recentTrips = db.prepare(`
+    const sessions = db.prepare(`
       SELECT * FROM game_sessions WHERE user_id = ? ORDER BY ended_at DESC LIMIT 10
-    `).all(user.id);
+    `).all(user.id) as any[];
+
+    const fr = db.prepare(`
+      SELECT status, sender_id, receiver_id FROM friend_requests
+      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY created_at DESC LIMIT 1
+    `).get(currentUserId, targetId, targetId, currentUserId) as any;
+    let friendStatus: 'none' | 'pending_sent' | 'pending_received' | 'friends' = 'none';
+    if (fr) {
+      if (fr.status === 'accepted') friendStatus = 'friends';
+      else if (fr.sender_id === currentUserId && fr.receiver_id === targetId) friendStatus = 'pending_sent';
+      else friendStatus = 'pending_received';
+    }
 
     res.json({
       user: {
@@ -123,7 +157,8 @@ router.get('/:id', requireAuth, (req: any, res: any) => {
         isAdmin: user.is_admin === 1,
       },
       achievements: achievementIds,
-      recentTrips
+      recentTrips: sessions.map(sessionToTrip),
+      friendStatus,
     });
   } catch (err: any) {
     console.error('Get user error:', err.message);

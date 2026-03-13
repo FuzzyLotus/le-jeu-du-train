@@ -117,6 +117,9 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         }
 
         const data = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'PublicProfileScreen.tsx:loadProfileOtherUser',message:'GET /api/users/:id friendStatus',data:{hasFriendStatus:'friendStatus' in (data||{}),friendStatusValue:data?.friendStatus},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         setUser(data?.user ?? data);
         setFriendStatus(data.friendStatus ?? data.friendStatus ?? 'none');
         setRecentTrips(data.recentTrips ?? []);
@@ -142,6 +145,9 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         headers: AuthService.getAuthHeaders(),
         body: JSON.stringify({ targetUserId: user.id })
       });
+      // #region agent log
+      fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'PublicProfileScreen.tsx:handleSendRequest',message:'POST /api/friends/request',data:{status:response.status,ok:response.ok},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
 
       if (!response.ok) {
         const error = await response.json();
@@ -369,10 +375,12 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                     <div key={trip.id} className="bg-surface border border-white/5 rounded-xl p-4 flex items-center justify-between">
                       <div className="flex flex-col min-w-0 mr-4">
                         <span className="text-white font-bold text-sm truncate">
-                          {showFullTripDetails ? trip.routeName : "Trajet masqué"}
+                          {showFullTripDetails
+                            ? trip.routeName
+                            : `Trajet effectué à ${new Date(trip.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false })}`}
                         </span>
                         <span className="text-white/40 text-xs">
-                          {new Date(trip.date).toLocaleDateString()} • {trip.distanceKm.toFixed(1)} km
+                          {new Date(trip.date).toLocaleDateString()} • {(trip.distanceKm ?? 0).toFixed(1)} km
                         </span>
                       </div>
                       <div className={clsx("px-2 py-1 rounded text-[10px] font-bold uppercase", trip.success ? "bg-success/20 text-success" : "bg-failure/20 text-failure")}>

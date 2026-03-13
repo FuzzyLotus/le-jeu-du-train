@@ -101,7 +101,7 @@ export function HistoryScreen() {
                       {trip.success ? "Réussi" : "Échoué"}
                     </span>
                     <span className="text-xs text-white/40 mt-0.5">
-                      {trip.distanceKm.toFixed(1)} km • {trip.crossingsCount} passages
+                      {(trip.distanceKm ?? 0).toFixed(1)} km • {trip.crossingsCount ?? 0} passages
                     </span>
                   </div>
                 </div>

@@ -25,7 +25,10 @@ export function FriendsScreen() {
         const response = await fetch('/api/friends', {
           headers: AuthService.getAuthHeaders()
         });
-        
+        // #region agent log
+        fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'FriendsScreen.tsx:loadFriends',message:'GET /api/friends',data:{status:response.status,ok:response.ok,contentType:response.headers.get('content-type')?.slice(0,30)},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         if (response.status === 401) {
           useAuthStore.getState().logout();
           navigate('/login');
@@ -34,6 +37,9 @@ export function FriendsScreen() {
 
         if (!response.ok) throw new Error('Failed to load friends');
         const data = await response.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'FriendsScreen.tsx:loadFriendsData',message:'friends response shape',data:{isArray:Array.isArray(data),length:Array.isArray(data)?data.length:0,sampleKeys:Array.isArray(data)&&data[0]?Object.keys(data[0]):null},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
 
         // Process data
         const pending = data
@@ -55,7 +61,7 @@ export function FriendsScreen() {
               id: isSender ? req.receiver_id : req.sender_id,
               username: isSender ? req.receiver_username : req.sender_username,
               displayName: isSender ? req.receiver_display_name : req.sender_display_name,
-              points: 0 // We don't have points in this query, would need a separate fetch or join
+              points: isSender ? (req.receiver_points ?? 0) : (req.sender_points ?? 0),
             };
           });
 
@@ -83,7 +89,10 @@ export function FriendsScreen() {
         headers: AuthService.getAuthHeaders(),
         body: JSON.stringify({ requestId })
       });
-      
+      // #region agent log
+      fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'FriendsScreen.tsx:handleAccept',message:'POST /api/friends/accept',data:{status:response.status,ok:response.ok},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+
       if (!response.ok) throw new Error('Failed to accept');
       
       // Move from pending to friends list locally
