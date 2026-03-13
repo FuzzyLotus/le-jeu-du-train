@@ -117,9 +117,6 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         }
 
         const data = await response.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'PublicProfileScreen.tsx:loadProfileOtherUser',message:'GET /api/users/:id friendStatus',data:{hasFriendStatus:'friendStatus' in (data||{}),friendStatusValue:data?.friendStatus},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         setUser(data?.user ?? data);
         setFriendStatus(data.friendStatus ?? data.friendStatus ?? 'none');
         setRecentTrips(data.recentTrips ?? []);
@@ -145,9 +142,6 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         headers: AuthService.getAuthHeaders(),
         body: JSON.stringify({ targetUserId: user.id })
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7831/ingest/d0f4f769-8050-4800-9144-f9e35d5afd0c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bda411'},body:JSON.stringify({sessionId:'bda411',location:'PublicProfileScreen.tsx:handleSendRequest',message:'POST /api/friends/request',data:{status:response.status,ok:response.ok},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
 
       if (!response.ok) {
         const error = await response.json();
