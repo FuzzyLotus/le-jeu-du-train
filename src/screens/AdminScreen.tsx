@@ -376,7 +376,7 @@ export function AdminScreen() {
     try {
       const response = await fetch('/api/admin/bot-action', {
         method: 'POST',
-        headers: AuthService.getAuthHeaders(),
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, botName })
       });
 
@@ -416,12 +416,13 @@ export function AdminScreen() {
     }
   };
 
-  const handleUnlockAchievement = async (achievementId: string, title: string) => {
+  const handleToggleAchievement = async (achievementId: string, title: string) => {
     if (!currentUser?.id) return;
     try {
       const existing = await db.achievements.where({ userId: currentUser.id, achievementId }).first();
       if (existing) {
-        addToast({ title: 'Info', message: 'Déjà débloqué', type: 'info' });
+        await db.achievements.delete(existing.id);
+        addToast({ title: 'Succès', message: `${title} réinitialisé`, type: 'success' });
         return;
       }
 
@@ -433,7 +434,7 @@ export function AdminScreen() {
       addToast({ title: 'Succès', message: `${title} débloqué!`, type: 'success' });
     } catch (e) {
       console.error(e);
-      addToast({ title: 'Erreur', message: 'Échec déblocage', type: 'error' });
+      addToast({ title: 'Erreur', message: 'Échec action succès', type: 'error' });
     }
   };
 
@@ -1108,12 +1109,11 @@ export function AdminScreen() {
                   return (
                     <button
                       key={ach.id}
-                      onClick={() => handleUnlockAchievement(ach.id, ach.title)}
-                      disabled={isUnlocked}
+                      onClick={() => handleToggleAchievement(ach.id, ach.title)}
                       className={clsx(
                         "flex items-center justify-between p-4 rounded-xl border transition-all text-left text-xs min-h-[56px]",
                         isUnlocked 
-                          ? "bg-green-500/10 border-green-500/20 text-green-500 opacity-50" 
+                          ? "bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20" 
                           : "bg-white/5 border-white/5 text-white/60 hover:bg-white/10"
                       )}
                     >

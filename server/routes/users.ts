@@ -111,6 +111,33 @@ router.put('/me', requireAuth, (req: any, res: any) => {
   }
 });
 
+// POST /api/users/achievements — sync newly unlocked achievements (e.g. after a trip)
+router.post('/achievements', requireAuth, (req: any, res: any) => {
+  try {
+    const { achievements } = req.body;
+    if (!Array.isArray(achievements) || achievements.length === 0) {
+      return res.status(400).json({ error: 'Tableau achievements requis.' });
+    }
+    const userId = req.user.id;
+    const now = Date.now();
+    const insert = db.prepare(`
+      INSERT OR IGNORE INTO user_achievements (user_id, achievement_id, unlocked_at)
+      VALUES (?, ?, ?)
+    `);
+    for (const item of achievements) {
+      const achievementId = item?.achievementId ?? item?.achievement_id;
+      const unlockedAt = typeof item?.unlockedAt === 'number' ? item.unlockedAt : now;
+      if (typeof achievementId === 'string' && achievementId.trim()) {
+        insert.run(userId, achievementId.trim(), unlockedAt);
+      }
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Sync achievements error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la synchronisation des succès.' });
+  }
+});
+
 // GET /api/users/:id
 router.get('/:id', requireAuth, (req: any, res: any) => {
   try {

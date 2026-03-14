@@ -279,4 +279,73 @@ router.post('/bot-action', requireAuth, requireAdmin, (req: any, res: any) => {
   }
 });
 
+// POST /api/admin/generate-trips — add 10 dummy trips for current user (admin only, dev)
+router.post('/generate-trips', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const userId = req.user.id;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+    if (!user) return res.status(404).json({ error: 'Utilisateur non trouvé.' });
+
+    const now = Date.now();
+    const insertSession = db.prepare(`
+      INSERT INTO game_sessions (user_id, score, distance_km, crossings, ended_at, has_bridge, has_tunnel, max_elevation, min_elevation, max_bridge_length, start_country, end_country, start_island, end_island)
+      VALUES (?, ?, ?, ?, ?, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL)
+    `);
+
+    const TRIP_COUNT = 10;
+    const PER_TRIP_CROSSINGS = 1;
+    const PER_TRIP_KM = 5;
+    const PER_TRIP_SCORE = PER_TRIP_CROSSINGS;
+
+    for (let i = 0; i < TRIP_COUNT; i++) {
+      const t = now - (TRIP_COUNT - i) * 60_000;
+      insertSession.run(userId, PER_TRIP_SCORE, PER_TRIP_KM, PER_TRIP_CROSSINGS, t);
+    }
+
+    const totalScore = TRIP_COUNT * PER_TRIP_SCORE;
+    const totalKm = TRIP_COUNT * PER_TRIP_KM;
+    const newPoints = (user.points ?? 0) + totalScore;
+    db.prepare(`
+      UPDATE users
+      SET points = points + ?,
+          total_earned = total_earned + ?,
+          streak = streak + ?,
+          trip_count = trip_count + ?,
+          total_distance_km = total_distance_km + ?,
+          longest_trip_km = MAX(longest_trip_km, ?),
+          max_crossings_in_trip = MAX(max_crossings_in_trip, ?),
+          highest_score = MAX(COALESCE(highest_score, 0), ?)
+      WHERE id = ?
+    `).run(totalScore, totalScore, totalScore, TRIP_COUNT, totalKm, PER_TRIP_KM, PER_TRIP_CROSSINGS, newPoints, userId);
+
+    const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+    const achievementIds = db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?')
+      .all(userId).map((a: any) => a.achievement_id);
+
+    const userJson = {
+      id: updated.id,
+      username: updated.username,
+      displayName: updated.display_name,
+      points: updated.points,
+      totalEarned: updated.total_earned,
+      tripCount: updated.trip_count,
+      streak: updated.streak,
+      longestTripKm: updated.longest_trip_km,
+      totalDistanceKm: updated.total_distance_km,
+      maxCrossingsInTrip: updated.max_crossings_in_trip,
+      highestScore: updated.highest_score ?? 0,
+      createdAt: updated.created_at,
+      isAdmin: updated.is_admin === 1,
+      preferences: safeJsonParse(updated.preferences),
+      homeLocation: safeJsonParse(updated.home_location),
+      achievements: achievementIds,
+    };
+
+    res.status(201).json({ user: userJson });
+  } catch (err: any) {
+    console.error('Admin generate-trips error:', err.message);
+    res.status(500).json({ error: 'Échec génération trajets.' });
+  }
+});
+
 export default router;
