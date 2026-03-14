@@ -60,7 +60,7 @@ router.post('/signup', authLimiter, async (req, res) => {
     const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
     
     const token = jwt.sign(
-      { id: newUser.id, isAdmin: newUser.is_admin === 1 },
+      { id: newUser.id, isAdmin: newUser.is_admin === 1, createdAt: newUser.created_at },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -111,7 +111,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, isAdmin: user.is_admin === 1 },
+      { id: user.id, isAdmin: user.is_admin === 1, createdAt: user.created_at },
       JWT_SECRET,
       { expiresIn: '24h' }
     );

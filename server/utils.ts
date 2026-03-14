@@ -9,8 +9,13 @@ export function requireAuth(req: any, res: any, next: any) {
   if (!authHeader) return res.status(401).json({ error: 'Non autorisé' });
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: number; isAdmin?: boolean; createdAt?: number };
+    const user = db.prepare('SELECT id, created_at FROM users WHERE id = ?').get(decoded.id) as { id: number; created_at: number } | undefined;
+    if (!user) return res.status(401).json({ error: 'Utilisateur introuvable' });
+    if (decoded.createdAt === undefined || decoded.createdAt !== user.created_at) {
+      return res.status(401).json({ error: 'Session invalide' });
+    }
+    req.user = { id: user.id, isAdmin: decoded.isAdmin };
     next();
   } catch (err) {
     res.status(401).json({ error: 'Token invalide' });
