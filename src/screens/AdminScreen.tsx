@@ -134,15 +134,19 @@ export function AdminScreen() {
 
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [friendRequests, setFriendRequests] = useState<Array<{ sender_id: number; receiver_id: number; status: string; sender_username: string; receiver_username: string }>>([]);
 
   useEffect(() => {
     if (activeTab === 'users' || activeTab === 'monitoring') {
       loadUsers();
     }
+    if (activeTab === 'monitoring' && currentUser?.id) {
+      loadFriendRequests();
+    }
     if (activeTab === 'feedback') {
       loadFeedback();
     }
-  }, [activeTab]);
+  }, [activeTab, currentUser?.id]);
 
   const loadFeedback = async () => {
     try {
@@ -151,9 +155,15 @@ export function AdminScreen() {
       if (response.ok) {
         const data = await response.json();
         setFeedback(data);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        addToast({ title: 'Erreur', message: data.error || 'Impossible de charger les retours.', type: 'error' });
+        setFeedback([]);
       }
     } catch (e) {
       console.error(e);
+      addToast({ title: 'Erreur', message: 'Impossible de charger les retours.', type: 'error' });
+      setFeedback([]);
     } finally {
       setLoadingFeedback(false);
     }
@@ -171,6 +181,19 @@ export function AdminScreen() {
       console.error(e);
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const loadFriendRequests = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const response = await fetch('/api/friends', { headers: AuthService.getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setFriendRequests(data);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
   const trips = useLiveQuery(() => db.trips.reverse().limit(100).toArray()); // Last 100 trips for moderation
@@ -364,13 +387,14 @@ export function AdminScreen() {
 
       addToast({ title: 'Succès', message: 'Alice & Bob créés', type: 'success' });
       loadUsers();
+      loadFriendRequests();
     } catch (error) {
       console.error(error);
       addToast({ title: 'Erreur', message: 'Échec création dummy users', type: 'error' });
     }
   };
 
-  const handleBotAction = async (action: 'send_request' | 'accept_request', botName: string) => {
+  const handleBotAction = async (action: 'send_request' | 'accept_request' | 'remove_friend', botName: string) => {
     if (!currentUser?.id) return;
 
     try {
@@ -388,10 +412,25 @@ export function AdminScreen() {
       }
 
       addToast({ title: 'Succès', message: data.message, type: 'success' });
+      loadFriendRequests();
     } catch (e) {
       console.error(e);
       addToast({ title: 'Erreur', message: 'Action échouée', type: 'error' });
     }
+  };
+
+  type BotFriendStatus = 'none' | 'pending_sent' | 'friends';
+  const getBotFriendStatus = (botUsername: string): BotFriendStatus => {
+    if (!currentUser?.id || !users?.length) return 'none';
+    const bot = users.find(u => u.username === botUsername);
+    if (!bot) return 'none';
+    const row = friendRequests.find(
+      fr => (fr.sender_id === currentUser!.id && fr.receiver_id === bot.id) || (fr.sender_id === bot.id && fr.receiver_id === currentUser!.id)
+    );
+    if (!row) return 'none';
+    if (row.status === 'accepted') return 'friends';
+    if (row.sender_id === currentUser!.id && row.receiver_id === bot.id) return 'pending_sent';
+    return 'none';
   };
 
   const handleGenerateTrips = async () => {
@@ -1057,13 +1096,13 @@ export function AdminScreen() {
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions + Alice & Bob */}
             <div className="bg-surface border border-white/5 rounded-3xl p-5">
               <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
                 <Zap className="w-4 h-4" />
                 Actions Rapides
               </h2>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 <Button onClick={handleGenerateDummyUsers} variant="secondary" className="text-xs py-4 h-auto min-h-[56px]">
                   Créer Alice & Bob
                 </Button>
@@ -1071,29 +1110,50 @@ export function AdminScreen() {
                   +10 Trajets (Moi)
                 </Button>
               </div>
-            </div>
-
-            {/* Bot Control */}
-            <div className="bg-surface border border-white/5 rounded-3xl p-5">
-              <h2 className="font-bold text-sm mb-3 flex items-center gap-2 text-white/70">
-                <UserPlus className="w-4 h-4" />
-                Contrôle des Bots
-              </h2>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-white/50 font-bold">Alice</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleBotAction('send_request', 'alice_w')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Demander</button>
-                    <button onClick={() => handleBotAction('accept_request', 'alice_w')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Accepter</button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm text-white/50 font-bold">Bob</span>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleBotAction('send_request', 'bob_builder')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Demander</button>
-                    <button onClick={() => handleBotAction('accept_request', 'bob_builder')} className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase hover:bg-white/10 transition-colors min-h-[48px]">Accepter</button>
-                  </div>
-                </div>
+              <div className="space-y-4 pt-2 border-t border-white/5">
+                {(['alice_w', 'bob_builder'] as const).map(botName => {
+                  const status = getBotFriendStatus(botName);
+                  const label = botName === 'alice_w' ? 'Alice' : 'Bob';
+                  const demanderActive = status === 'none';
+                  const secondAction: 'accept' | 'remove' = status === 'friends' ? 'remove' : 'accept';
+                  const secondActive = status === 'pending_sent' || status === 'friends';
+                  const demanderHighlighted = status === 'pending_sent' || status === 'friends';
+                  return (
+                    <div key={botName} className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-white/50 font-bold">{label}</span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => demanderActive && handleBotAction('send_request', botName)}
+                          disabled={!demanderActive}
+                          className={clsx(
+                            'w-24 py-3 rounded-xl text-xs font-bold uppercase transition-colors min-h-[48px]',
+                            demanderHighlighted
+                              ? 'bg-green-500/20 border border-green-500/40 text-green-400 cursor-not-allowed'
+                              : demanderActive
+                                ? 'bg-white/5 border border-white/10 hover:bg-white/10 text-white'
+                                : 'bg-white/5 border border-white/10 text-white/40 cursor-not-allowed'
+                          )}
+                        >
+                          Demander
+                        </button>
+                        <button
+                          onClick={() => secondActive && (secondAction === 'remove' ? handleBotAction('remove_friend', botName) : handleBotAction('accept_request', botName))}
+                          disabled={!secondActive}
+                          className={clsx(
+                            'w-24 py-3 rounded-xl text-xs font-bold uppercase transition-colors min-h-[48px]',
+                            !secondActive
+                              ? 'bg-white/5 border border-white/10 text-white/40 cursor-not-allowed'
+                              : secondAction === 'remove'
+                                ? 'bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20'
+                                : 'bg-white/5 border border-white/10 hover:bg-white/10 text-white'
+                          )}
+                        >
+                          {secondAction === 'remove' ? 'Retirer' : 'Accepter'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

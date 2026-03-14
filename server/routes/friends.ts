@@ -109,4 +109,26 @@ router.post('/reject', requireAuth, (req: any, res: any) => {
   }
 });
 
+// POST /api/friends/remove — remove friendship (either user can remove)
+router.post('/remove', requireAuth, (req: any, res: any) => {
+  try {
+    const currentUserId = req.user.id;
+    const targetUserId = typeof req.body.targetUserId === 'number' ? req.body.targetUserId : parseInt(String(req.body.targetUserId), 10);
+    if (isNaN(targetUserId) || targetUserId === currentUserId) {
+      return res.status(400).json({ error: 'Utilisateur cible invalide.' });
+    }
+
+    const row = db.prepare(
+      'SELECT id FROM friend_requests WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) AND status = ?'
+    ).get(currentUserId, targetUserId, targetUserId, currentUserId, 'accepted') as { id: number } | undefined;
+    if (!row) return res.status(404).json({ error: 'Vous n\'êtes pas amis avec cet utilisateur.' });
+
+    db.prepare('DELETE FROM friend_requests WHERE id = ?').run(row.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('Friend remove error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression de l\'amitié.' });
+  }
+});
+
 export default router;

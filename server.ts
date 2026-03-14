@@ -53,6 +53,55 @@ async function startServer() {
     next();
   });
   app.use('/api/users', usersRouter);
+  // Explicit admin dev routes (ensure they're registered even if router order differs)
+  app.post('/api/admin/bot-action', requireAuth, requireAdmin, (req: any, res: any) => {
+    try {
+      const { action, botName } = req.body;
+      const allowedBots = ['alice_w', 'bob_builder'];
+      if (typeof action !== 'string' || typeof botName !== 'string' || !allowedBots.includes(botName)) {
+        return res.status(400).json({ error: 'Action ou bot invalide.' });
+      }
+      if (action !== 'send_request' && action !== 'accept_request' && action !== 'remove_friend') {
+        return res.status(400).json({ error: 'Action invalide.' });
+      }
+      const bot = db.prepare('SELECT id FROM users WHERE username = ?').get(botName) as { id: number } | undefined;
+      if (!bot) return res.status(404).json({ error: 'Bot (Alice ou Bob) non trouvé. Créez-les d\'abord.' });
+      const currentUserId = req.user.id;
+      const botId = bot.id;
+      if (action === 'send_request') {
+        const existing = db.prepare(
+          'SELECT id, status FROM friend_requests WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)'
+        ).get(currentUserId, botId, botId, currentUserId) as any;
+        if (existing) {
+          if (existing.status === 'accepted') return res.status(400).json({ error: 'Vous êtes déjà amis.' });
+          return res.status(400).json({ error: 'Demande déjà envoyée ou en attente.' });
+        }
+        const now = Date.now();
+        db.prepare(
+          'INSERT INTO friend_requests (sender_id, receiver_id, status, created_at) VALUES (?, ?, ?, ?)'
+        ).run(currentUserId, botId, 'pending', now);
+        return res.json({ success: true, message: 'Demande envoyée.' });
+      }
+      if (action === 'remove_friend') {
+        const row = db.prepare(
+          'SELECT id FROM friend_requests WHERE ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)) AND status = ?'
+        ).get(currentUserId, botId, botId, currentUserId, 'accepted') as { id: number } | undefined;
+        if (!row) return res.status(404).json({ error: 'Vous n\'êtes pas amis avec ce bot.' });
+        db.prepare('DELETE FROM friend_requests WHERE id = ?').run(row.id);
+        return res.json({ success: true, message: 'Amitié retirée.' });
+      }
+      // Accept on behalf of the bot: find the pending request that current user sent TO the bot (receiver = bot)
+      const row = db.prepare(
+        'SELECT id FROM friend_requests WHERE sender_id = ? AND receiver_id = ? AND status = ?'
+      ).get(currentUserId, botId, 'pending') as { id: number } | undefined;
+      if (!row) return res.status(404).json({ error: 'Aucune demande en attente (envoyez d\'abord une demande au bot).' });
+      db.prepare('UPDATE friend_requests SET status = ? WHERE id = ?').run('accepted', row.id);
+      res.json({ success: true, message: 'Demande acceptée.' });
+    } catch (err: any) {
+      console.error('Admin bot-action error:', err.message);
+      res.status(500).json({ error: 'Action échouée.' });
+    }
+  });
   app.use('/api/admin', adminRouter);
   app.use('/api/feedback', feedbackRouter);
   app.use('/api/friends', friendsRouter);

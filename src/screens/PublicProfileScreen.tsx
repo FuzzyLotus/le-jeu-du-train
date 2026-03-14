@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User as UserIcon, MapPin, BarChart3, Calendar, UserPlus, Check, X, Shield, Clock, Settings, Trophy, History, Lock, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, User as UserIcon, MapPin, BarChart3, Calendar, UserPlus, UserMinus, Check, X, Shield, Clock, Settings, Trophy, History, Lock, CheckCircle2, Trash2 } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
@@ -24,6 +24,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'achievements'>('stats');
   const [selectedAchievement, setSelectedAchievement] = useState<typeof ACHIEVEMENTS[0] | null>(null);
+  const [showNukeConfirm, setShowNukeConfirm] = useState(false);
 
   const getRarityColor = (rarity: string) => {
     switch (rarity) {
@@ -186,6 +187,46 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
     }
   };
 
+  const handleUnfriend = async () => {
+    if (!currentUser?.id || !user?.id) return;
+    try {
+      const response = await fetch('/api/friends/remove', {
+        method: 'POST',
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: user.id })
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Impossible de retirer l\'ami.');
+      }
+      setFriendStatus('none');
+      addToast({ title: 'Succès', message: 'Amitié retirée.', type: 'success' });
+    } catch (error: any) {
+      console.error(error);
+      addToast({ title: 'Erreur', message: error.message || 'Action impossible.', type: 'error' });
+    }
+  };
+
+  const handleNukeUser = async () => {
+    if (!currentUser?.id || !user?.id) return;
+    setShowNukeConfirm(false);
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'DELETE',
+        headers: AuthService.getAuthHeaders()
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Impossible de supprimer l\'utilisateur.');
+      }
+      addToast({ title: 'Succès', message: 'Utilisateur supprimé.', type: 'success' });
+      navigate('/friends');
+    } catch (error: any) {
+      console.error(error);
+      addToast({ title: 'Erreur', message: error.message || 'Action impossible.', type: 'error' });
+    }
+  };
+
   if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -273,19 +314,63 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                 </button>
               )}
               {friendStatus === 'friends' && (
-                <div className="w-full py-2 bg-success/20 text-success font-bold rounded-xl flex items-center justify-center gap-2 border border-success/20">
-                  <Check className="w-4 h-4" />
-                  Amis
-                </div>
+                <>
+                  <div className="w-full py-2 bg-success/20 text-success font-bold rounded-xl flex items-center justify-center gap-2 border border-success/20">
+                    <Check className="w-4 h-4" />
+                    Amis
+                  </div>
+                  <button
+                    onClick={handleUnfriend}
+                    className="w-full mt-2 py-2 bg-red-500/10 text-red-400 font-bold rounded-xl flex items-center justify-center gap-2 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                  >
+                    <UserMinus className="w-4 h-4" />
+                    Retirer des amis
+                  </button>
+                </>
               )}
               {friendStatus === 'none' && user.preferences?.allowFriendRequests === false && (
                 <div className="text-xs text-white/30 italic">
                   Cet utilisateur n'accepte pas les demandes.
                 </div>
               )}
+              {currentUser?.isAdmin && !isMe && user?.id && (
+                <button
+                  onClick={() => setShowNukeConfirm(true)}
+                  className="w-full mt-2 py-2 bg-failure/10 text-failure font-bold rounded-xl flex items-center justify-center gap-2 border border-failure/20 hover:bg-failure/20 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Supprimer l'utilisateur
+                </button>
+              )}
             </div>
           )}
         </section>
+
+        {/* Nuke user confirmation */}
+        {showNukeConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowNukeConfirm(false)}>
+            <div className="bg-surface border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+              <p className="text-white font-medium mb-4">
+                Êtes-vous sûr de vouloir supprimer <span className="font-bold">{user?.displayName}</span> ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNukeConfirm(false)}
+                  className="flex-1 py-2 rounded-xl bg-white/10 text-white font-bold border border-white/10 hover:bg-white/20 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleNukeUser}
+                  className="flex-1 py-2 rounded-xl bg-failure text-white font-bold hover:bg-failure/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex p-1 bg-surface border border-white/10 rounded-xl">
