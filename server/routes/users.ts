@@ -38,6 +38,9 @@ router.get('/me', requireAuth, (req: any, res: any) => {
       SELECT * FROM game_sessions WHERE user_id = ? ORDER BY ended_at DESC LIMIT 10
     `).all(user.id) as any[];
 
+    const pointsRank = 1 + (db.prepare('SELECT COUNT(*) as n FROM users WHERE points > ?').get(user.points ?? 0) as { n: number }).n;
+    const tripsRank = 1 + (db.prepare('SELECT COUNT(*) as n FROM users WHERE trip_count > ?').get(user.trip_count ?? 0) as { n: number }).n;
+
     res.json({
       user: {
         id: user.id,
@@ -55,6 +58,8 @@ router.get('/me', requireAuth, (req: any, res: any) => {
         isAdmin: user.is_admin === 1,
         preferences: safeJsonParse(user.preferences),
         homeLocation: safeJsonParse(user.home_location),
+        pointsRank,
+        tripsRank,
       },
       achievements: achievementIds,
       recentTrips: sessions.map(sessionToTrip),
@@ -186,6 +191,9 @@ router.get('/:id', requireAuth, (req: any, res: any) => {
       else friendStatus = 'pending_received';
     }
 
+    const pointsRank = 1 + (db.prepare('SELECT COUNT(*) as n FROM users WHERE points > ?').get(user.points ?? 0) as { n: number }).n;
+    const tripsRank = 1 + (db.prepare('SELECT COUNT(*) as n FROM users WHERE trip_count > ?').get(user.trip_count ?? 0) as { n: number }).n;
+
     res.json({
       user: {
         id: user.id,
@@ -201,6 +209,8 @@ router.get('/:id', requireAuth, (req: any, res: any) => {
         highestScore: user.highest_score,
         createdAt: user.created_at,
         isAdmin: user.is_admin === 1,
+        pointsRank,
+        tripsRank,
       },
       achievements: achievementIds,
       recentTrips: sessions.map(sessionToTrip),

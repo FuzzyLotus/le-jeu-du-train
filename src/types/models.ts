@@ -33,6 +33,10 @@ export interface User {
   homeLocation?: GeocodeResult;
   preferences?: UserPreferences;
   achievements?: string[];
+  /** Global rank by points (1 = first). */
+  pointsRank?: number;
+  /** Global rank by trip count (1 = first). */
+  tripsRank?: number;
 }
 
 export interface Trip {

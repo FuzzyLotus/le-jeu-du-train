@@ -129,32 +129,36 @@ export function LiveTracker({ onClose }: LiveTrackerProps) {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="flex flex-col flex-1 items-center justify-center text-center"
+            className="flex flex-col flex-1 text-center"
           >
-            <div className="relative w-48 h-48 flex items-center justify-center mb-8">
-              {/* Radar pulses */}
-              <motion.div 
-                animate={{ scale: [1, 2], opacity: [0.5, 0] }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
-                className="absolute inset-0 bg-primary/30 rounded-full"
-              />
-              <motion.div 
-                animate={{ scale: [1, 2], opacity: [0.5, 0] }}
-                transition={{ repeat: Infinity, duration: 2, ease: "easeOut", delay: 1 }}
-                className="absolute inset-0 bg-primary/30 rounded-full"
-              />
-              <div className="w-24 h-24 bg-surface border-2 border-primary rounded-full flex items-center justify-center z-10 shadow-[0_0_30px_rgba(255,193,7,0.3)]">
-                <Activity className="w-10 h-10 text-primary" />
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div className="relative w-48 h-48 flex items-center justify-center mb-8">
+                {/* Radar pulses */}
+                <motion.div 
+                  animate={{ scale: [1, 2], opacity: [0.5, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
+                  className="absolute inset-0 bg-primary/30 rounded-full"
+                />
+                <motion.div 
+                  animate={{ scale: [1, 2], opacity: [0.5, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeOut", delay: 1 }}
+                  className="absolute inset-0 bg-primary/30 rounded-full"
+                />
+                <div className="w-24 h-24 bg-surface border-2 border-primary rounded-full flex items-center justify-center z-10 shadow-[0_0_30px_rgba(255,193,7,0.3)]">
+                  <Activity className="w-10 h-10 text-primary" />
+                </div>
               </div>
+              <h2 className="font-display text-3xl mb-2 text-white">Tracking Actif</h2>
+              <p className="text-white/50 mb-2">Conduis prudemment. Nous comptons en arrière-plan.</p>
+              <div className="font-mono text-2xl text-primary">{formatTime(elapsed)}</div>
             </div>
-            
-            <h2 className="font-display text-3xl mb-2 text-white">Tracking Actif</h2>
-            <p className="text-white/50 mb-2">Conduis prudemment. Nous comptons en arrière-plan.</p>
-            <div className="font-mono text-2xl text-primary mb-12">{formatTime(elapsed)}</div>
 
-            <div className="w-full mt-auto">
-              <Button variant="danger" fullWidth className="py-5 text-lg" onClick={stopTracking}>
+            <div className="w-full flex flex-col gap-3">
+              <Button variant="danger" fullWidth className="min-h-[6.75rem] py-12 text-lg touch-manipulation" onClick={stopTracking}>
                 Terminer le trajet
+              </Button>
+              <Button variant="secondary" fullWidth className="py-4 text-white/70 border-white/20 touch-manipulation" onClick={onClose}>
+                Annuler
               </Button>
             </div>
           </motion.div>
@@ -198,7 +202,7 @@ export function LiveTracker({ onClose }: LiveTrackerProps) {
               </div>
 
               <div className="w-full max-w-xs">
-                <p className="text-center text-sm mb-4 text-white/70">As-tu levé les jambes à <strong>tous</strong> les passages ?</p>
+                <p className="text-center text-base font-medium mb-4 text-white/70">As-tu levé les jambes à <strong className="text-white">tous</strong> les passages ?</p>
                 <div className="flex flex-col gap-3">
                   <Button 
                     variant="primary" 

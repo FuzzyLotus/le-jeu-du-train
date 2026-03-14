@@ -70,9 +70,10 @@ router.post('/reply', requireAuth, (req: any, res: any) => {
     }
     const replies: Array<{ senderId: number; isAdmin: boolean; message: string; createdAt: number }> = safeJsonParse(row.replies) || [];
     const now = Date.now();
+    // Reply from the user feedback screen is always as the user (their name), even if they are an admin
     replies.push({
       senderId: req.user.id,
-      isAdmin: req.user.isAdmin === true,
+      isAdmin: false,
       message: msg.trim(),
       createdAt: now,
     });

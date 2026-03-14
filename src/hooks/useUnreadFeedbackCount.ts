@@ -20,6 +20,7 @@ export function useUnreadFeedbackCount(userId: number | undefined, enabled: bool
         if (!response.ok || cancelled) return;
         const data: Feedback[] = await response.json();
         const lastRead = getFeedbackLastRead(userId);
+        // User notification = threads with unread admin replies
         const unreadCount = data.filter((item) => {
           const adminReplies = item.replies?.filter((r) => r.isAdmin) ?? [];
           return adminReplies.some((r) => r.createdAt > lastRead);

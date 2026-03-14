@@ -93,15 +93,23 @@ export function AchievementsScreen() {
           const displayIcon = (isSecret && !isUnlocked) ? '❓' : (isUnlocked ? icon : '🔒');
 
           return (
-            <button 
+            <motion.button
               key={ach.id}
               onClick={() => setSelectedAchievement(ach)}
               className={clsx(
-                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all text-center relative overflow-hidden h-32 group",
+                "flex flex-col items-center justify-center p-3 rounded-2xl border transition-colors text-center relative overflow-hidden h-32 group",
                 isUnlocked 
-                  ? "bg-surface border-white/10 shadow-lg opacity-100 hover:scale-[1.02]" 
+                  ? "bg-primary/10 border-primary/30 opacity-100 hover:scale-[1.02]" 
                   : "bg-surface border-white/5 opacity-40 hover:opacity-60"
               )}
+              animate={isUnlocked ? {
+                boxShadow: [
+                  '0 0 5px rgba(255,193,7,0.1)',
+                  '0 0 11px rgba(255,193,7,0.175)',
+                  '0 0 5px rgba(255,193,7,0.1)',
+                ],
+              } : undefined}
+              transition={isUnlocked ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
             >
               <div className={clsx("absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-tighter text-white/90", getRarityColor(ach.rarity))}>
                 {getRarityLabel(ach.rarity)}
@@ -120,7 +128,7 @@ export function AchievementsScreen() {
               )}>
                 {displayTitle}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

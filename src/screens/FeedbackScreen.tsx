@@ -309,29 +309,34 @@ export function FeedbackScreen() {
                 <div
                   key={item.id}
                   className={clsx(
-                    "rounded-3xl px-6 pt-6 pb-4 overflow-hidden border",
+                    "rounded-3xl px-6 pt-6 pb-4 overflow-hidden border border-t-4",
+                    item.status === 'new' && "border-t-emerald-500",
+                    item.status === 'pending' && "border-t-yellow-500",
+                    item.status === 'in_progress' && "border-t-blue-500",
+                    (item.status === 'resolved' || item.status === 'completed') && "border-t-green-500",
+                    (item.status === 'rejected' || item.status === 'closed') && "border-t-red-500",
                     unreadItemIds.has(item.id!)
                       ? "bg-primary/10 border-primary/40 ring-2 ring-primary/30"
                       : "bg-surface border-white/5"
                   )}
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {item.type === 'bug' ? (
-                        <span className="bg-failure/20 text-failure text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold flex items-center gap-1">
+                        <span className="bg-failure/20 text-failure text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold flex items-center gap-1 shrink-0">
                           <Bug className="w-3 h-3" /> Bug
                         </span>
                       ) : (
-                        <span className="bg-primary/20 text-primary text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold flex items-center gap-1">
+                        <span className="bg-primary/20 text-primary text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold flex items-center gap-1 shrink-0">
                           <MessageSquare className="w-3 h-3" /> Suggestion
                         </span>
                       )}
-                      <span className="text-xs text-white/30">
+                      <span className="text-xs text-white/30 shrink-0">
                         {new Date(item.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                     <div className={clsx(
-                      "flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full border",
+                      "flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full border shrink-0",
                       item.status === 'new' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
                       item.status === 'pending' && "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
                       item.status === 'in_progress' && "bg-blue-500/10 text-blue-500 border-blue-500/20",

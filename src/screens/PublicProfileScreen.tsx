@@ -424,7 +424,28 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                 animate={{ opacity: 1, y: 0 }}
                 className="grid grid-cols-2 gap-3"
               >
-                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
+                  {user.pointsRank != null && user.pointsRank < 100 && (
+                    <span className="absolute top-3 right-3 text-2xl font-normal text-white/10 tabular-nums" aria-hidden>#{user.pointsRank}</span>
+                  )}
+                  {user.pointsRank != null && user.pointsRank >= 1 && user.pointsRank <= 3 && (
+                    <motion.span
+                      className={clsx(
+                        "absolute bottom-3 right-3 flex items-center justify-center",
+                        user.pointsRank === 1 && "text-amber-400/50",
+                        user.pointsRank === 2 && "text-slate-300/50",
+                        user.pointsRank === 3 && "text-amber-600/50"
+                      )}
+                      style={{
+                        filter: user.pointsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.pointsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                      }}
+                      animate={{ opacity: [0.7, 1, 0.7] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      aria-hidden
+                    >
+                      <Trophy className="w-6 h-6" />
+                    </motion.span>
+                  )}
                   <BarChart3 className="w-6 h-6 text-yellow-400 mb-2" />
                   <span className="text-2xl font-display text-white">{user.points}</span>
                   <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
@@ -434,7 +455,28 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                   <span className="text-2xl font-display text-white">{user.highestScore || 0}</span>
                   <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Record</span>
                 </div>
-                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
+                  {user.tripsRank != null && user.tripsRank < 100 && (
+                    <span className="absolute top-3 right-3 text-2xl font-normal text-white/10 tabular-nums" aria-hidden>#{user.tripsRank}</span>
+                  )}
+                  {user.tripsRank != null && user.tripsRank >= 1 && user.tripsRank <= 3 && (
+                    <motion.span
+                      className={clsx(
+                        "absolute bottom-3 right-3 flex items-center justify-center",
+                        user.tripsRank === 1 && "text-amber-400/50",
+                        user.tripsRank === 2 && "text-slate-300/50",
+                        user.tripsRank === 3 && "text-amber-600/50"
+                      )}
+                      style={{
+                        filter: user.tripsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.tripsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                      }}
+                      animate={{ opacity: [0.7, 1, 0.7] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      aria-hidden
+                    >
+                      <Trophy className="w-6 h-6" />
+                    </motion.span>
+                  )}
                   <MapPin className="w-6 h-6 text-purple-400 mb-2" />
                   <span className="text-2xl font-display text-white">{user.tripCount}</span>
                   <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Trajets</span>
@@ -511,20 +553,27 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                 const icon = parts.length > 1 ? parts[parts.length - 1] : '🏆';
                 const displayIcon = (isSecret && !isUnlocked) ? '❓' : icon;
                 return (
-                  <button 
+                  <motion.button
                     key={ach.id}
                     onClick={() => setSelectedAchievement(ach)}
                     className={clsx(
-                      "aspect-square flex flex-col items-center justify-between p-2 rounded-2xl border transition-all text-center relative overflow-hidden",
+                      "aspect-square flex flex-col items-center justify-between p-2 rounded-2xl border transition-colors text-center relative overflow-hidden",
                       isUnlocked 
-                        ? "bg-primary/10 border-primary/30 shadow-[0_0_10px_rgba(255,193,7,0.1)] opacity-100 hover:bg-primary/20" 
+                        ? "bg-primary/10 border-primary/30 opacity-100 hover:bg-primary/20" 
                         : "bg-surface border-white/5 opacity-40 grayscale hover:opacity-60"
                     )}
+                    animate={isUnlocked ? {
+                      boxShadow: [
+                        '0 0 5px rgba(255,193,7,0.1)',
+                        '0 0 11px rgba(255,193,7,0.175)',
+                        '0 0 5px rgba(255,193,7,0.1)',
+                      ],
+                    } : undefined}
+                    transition={isUnlocked ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : undefined}
                   >
-                    <div className={clsx("absolute top-1 left-1 w-1.5 h-1.5 rounded-full", getRarityColor(ach.rarity))} />
                     {isUnlocked && (
-                      <div className="absolute top-1 right-1">
-                        <CheckCircle2 className="w-3 h-3 text-primary" />
+                      <div className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-primary" />
                       </div>
                     )}
                     <div className="flex-1 flex items-center justify-center min-h-0">
@@ -533,7 +582,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                     {pct != null && (
                       <span className="text-[9px] text-white/35 uppercase tracking-wider shrink-0">{pct}% joueurs</span>
                     )}
-                  </button>
+                  </motion.button>
                 );
               })}
             </motion.section>

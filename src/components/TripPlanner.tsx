@@ -489,7 +489,7 @@ export function TripPlanner({ onClose }: TripPlannerProps) {
               </div>
 
               <div className="w-full max-w-xs">
-                <p className="text-center text-sm mb-4 text-white/70">As-tu levé les jambes à <strong>tous</strong> les passages ?</p>
+                <p className="text-center text-base font-medium mb-4 text-white/70">As-tu levé les jambes à <strong className="text-white">tous</strong> les passages ?</p>
                 <div className="flex flex-col gap-3">
                   <Button 
                     variant="primary" 
