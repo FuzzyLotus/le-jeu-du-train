@@ -239,7 +239,7 @@ export class AchievementEngine {
         const { AuthService } = await import('./AuthService');
         await fetch('/api/users/achievements', {
           method: 'POST',
-          headers: AuthService.getAuthHeaders(),
+          headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             achievements: newlyUnlocked.map(a => ({ achievementId: a.id, unlockedAt: Date.now() }))
           })
