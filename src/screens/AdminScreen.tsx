@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { APP_VERSION, LAST_SYNC } from '../version';
-import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, Download, Upload, Edit, Ban, RefreshCw, KeyRound } from 'lucide-react';
+import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, ShieldOff, Download, Upload, Edit, Ban, RefreshCw, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, type SystemSetting } from '../db/database';
 import { useAuthStore } from '../store/useAuthStore';
@@ -22,6 +22,7 @@ export function AdminScreen() {
   
   const [userToDelete, setUserToDelete] = useState<{id: number, username: string} | null>(null);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [updatingAdminUserId, setUpdatingAdminUserId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'monitoring' | 'users' | 'feedback' | 'system'>('monitoring');
   const [activeSubTab, setActiveSubTab] = useState<string>('');
   const [replyText, setReplyText] = useState<{[key: number]: string}>({});
@@ -175,7 +176,7 @@ export function AdminScreen() {
     }
   }, [activeTab, currentUser?.id]);
 
-  // Fetch feedback when not on feedback tab to compute admin unread count (user replies since last read)
+  // Admin unread = unresponded messages by users (new feedback from others, or user replies from others since last read)
   useEffect(() => {
     const userId = currentUser?.id;
     if (!userId || activeTab === 'feedback') return;
@@ -187,8 +188,8 @@ export function AdminScreen() {
         const data: Feedback[] = await response.json();
         const lastRead = getFeedbackAdminLastRead(userId);
         const count = data.filter((item) =>
-          (item.status === 'new' && item.createdAt > lastRead) ||
-          item.replies?.some((r) => !r.isAdmin && r.createdAt > lastRead)
+          (item.status === 'new' && item.createdAt > lastRead && item.userId !== userId) ||
+          item.replies?.some((r) => !r.isAdmin && r.createdAt > lastRead && r.senderId !== userId)
         ).length;
         if (!cancelled) setAdminUnreadFeedbackCount(count);
       } catch {
@@ -255,7 +256,7 @@ export function AdminScreen() {
   const [adminUnreadItemIds, setAdminUnreadItemIds] = useState<Set<number>>(new Set());
   const adminHasMarkedReadRef = useRef(false);
 
-  // Mark admin feedback as read when viewing the tab and capture unread item ids for highlighting (user replies)
+  // Mark admin feedback as read when viewing the tab; highlight items with unresponded user messages (from others)
   useEffect(() => {
     if (!currentUser?.id || activeTab !== 'feedback' || loadingFeedback || adminHasMarkedReadRef.current) return;
     adminHasMarkedReadRef.current = true;
@@ -263,8 +264,8 @@ export function AdminScreen() {
     const ids = new Set(
       feedback
         .filter((item) =>
-          (item.status === 'new' && item.createdAt > prevLastRead) ||
-          item.replies?.some((r) => !r.isAdmin && r.createdAt > prevLastRead)
+          (item.status === 'new' && item.createdAt > prevLastRead && item.userId !== currentUser.id) ||
+          item.replies?.some((r) => !r.isAdmin && r.createdAt > prevLastRead && r.senderId !== currentUser.id)
         )
         .map((item) => item.id)
         .filter((id): id is number => id != null)
@@ -297,9 +298,58 @@ export function AdminScreen() {
     });
   })() : [];
 
+  const handleSetAdmin = async (userId: number, isAdmin: boolean) => {
+    if (!currentUser?.id) return;
+    setUpdatingAdminUserId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAdmin }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || res.statusText);
+      }
+      const updated = await res.json();
+      addToast({
+        title: 'Succès',
+        message: isAdmin ? 'Droits admin accordés.' : 'Droits admin retirés.',
+        type: 'success',
+      });
+      loadUsers();
+      if (currentUser.id === userId) setCurrentUser({ ...currentUser, isAdmin: updated.isAdmin });
+    } catch (e: any) {
+      addToast({ title: 'Erreur', message: e?.message || 'Échec mise à jour', type: 'error' });
+    } finally {
+      setUpdatingAdminUserId(null);
+    }
+  };
+
   const handleUpdateUser = async () => {
-    // This requires a new endpoint to update other users, skipping for now or implementing if needed
-    addToast({ title: 'Info', message: 'Édition via API non implémentée', type: 'info' });
+    if (userToEdit?.id == null) return;
+    const userId = userToEdit.id!;
+    setUpdatingAdminUserId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAdmin: userToEdit.isAdmin }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || res.statusText);
+      }
+      const updated = await res.json();
+      addToast({ title: 'Succès', message: 'Droits admin mis à jour.', type: 'success' });
+      loadUsers();
+      if (currentUser?.id === userId) setCurrentUser({ ...currentUser, isAdmin: updated.isAdmin });
+      setUserToEdit(null);
+    } catch (e: any) {
+      addToast({ title: 'Erreur', message: e?.message || 'Échec mise à jour', type: 'error' });
+    } finally {
+      setUpdatingAdminUserId(null);
+    }
   };
 
   const handleDeleteTrip = async (id: number) => {
@@ -648,7 +698,7 @@ export function AdminScreen() {
           <MessageSquare className="w-6 h-6" />
           Avis
           {adminUnreadFeedbackCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-primary text-black text-[10px] font-bold">
+            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-primary text-black text-[10px] font-bold">
               {adminUnreadFeedbackCount > 99 ? '99+' : adminUnreadFeedbackCount}
             </span>
           )}
@@ -794,42 +844,83 @@ export function AdminScreen() {
               )}
             </div>
 
-            {users?.filter(u => 
-              u.displayName.toLowerCase().includes(userSearch.toLowerCase()) || 
-              u.username.toLowerCase().includes(userSearch.toLowerCase())
-            ).map((user) => (
-              <div key={user.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-black/20 rounded-2xl p-4 border border-white/5 gap-4">
-                <div className="flex flex-col overflow-hidden">
+            {users?.filter(u => {
+              const name = (u.displayName ?? '').toString();
+              const handle = (u.username ?? '').toString();
+              const q = userSearch.trim().toLowerCase();
+              return !q || name.toLowerCase().includes(q) || handle.toLowerCase().includes(q);
+            }).map((user, index) => (
+              <div
+                key={user.id != null && user.id > 0 ? user.id : `user-${index}`}
+                className={clsx(
+                  "flex flex-col gap-3 bg-black/20 rounded-2xl p-4 border border-white/5 overflow-hidden border-t-4",
+                  user.isAdmin && "border-t-violet-600"
+                )}
+              >
+                <div className="flex flex-col min-w-0 shrink-0">
                   <span className="font-bold text-white truncate flex items-center gap-2 text-lg">
-                    {user.displayName}
-                    {user.isAdmin && <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Admin</span>}
+                    {(user.displayName ?? '').toString() || '—'}
+                    {user.isAdmin && <span className="text-[10px] bg-violet-600/20 text-violet-400 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold shrink-0">Admin</span>}
                   </span>
-                  <span className="text-sm text-white/40 truncate font-mono">@{user.username}</span>
+                  {user.id != null && user.id > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/profile/${user.id}`)}
+                      className="text-sm text-white/40 truncate font-mono hover:text-white/70 hover:underline underline-offset-1 text-left focus:outline-none focus:ring-0"
+                    >
+                      @{(user.username ?? '').toString() || '—'}
+                    </button>
+                  ) : (
+                    <span className="text-sm text-white/40 truncate font-mono">@{(user.username ?? '').toString() || '—'}</span>
+                  )}
                   <div className="flex gap-3 mt-1 text-xs text-white/50">
-                    <span>🏆 {user.points} pts</span>
-                    <span>🔥 {user.streak} série</span>
-                    <span>🚗 {user.tripCount} trajets</span>
+                    <span>🏆 {user.points ?? 0} pts</span>
+                    <span>🔥 {user.streak ?? 0} série</span>
+                    <span>🚗 {user.tripCount ?? 0} trajets</span>
                   </div>
                 </div>
-                
-                {user.id !== currentUser.id && (
-                  <div className="flex gap-2 shrink-0 self-end sm:self-center">
-                    <button
-                      onClick={() => setUserToEdit(user)}
-                      className="h-10 px-4 rounded-xl bg-white/5 text-white border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Éditer
-                    </button>
-                    <button
-                      onClick={() => user.id !== undefined && setUserToDelete({ id: user.id, username: user.username })}
-                      className="h-10 px-4 rounded-xl bg-failure/10 text-failure border border-failure/20 flex items-center justify-center gap-2 hover:bg-failure/20 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Supprimer
-                    </button>
+                <div className="flex flex-wrap gap-2">
+                    {!user.isAdmin && user.id != null && user.id > 0 && (
+                      <button
+                        onClick={() => handleSetAdmin(user.id!, true)}
+                        disabled={updatingAdminUserId === user.id}
+                        className="h-9 px-3 rounded-lg bg-violet-600/10 text-violet-400 border border-violet-600/20 flex items-center justify-center gap-1.5 hover:bg-violet-600/20 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        title="Rendre admin"
+                      >
+                        {updatingAdminUserId === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                        Rendre admin
+                      </button>
+                    )}
+                    {user.isAdmin && user.id !== currentUser.id && user.id != null && user.id > 0 && (
+                      <button
+                        onClick={() => handleSetAdmin(user.id!, false)}
+                        disabled={updatingAdminUserId === user.id}
+                        className="h-9 px-3 rounded-lg bg-failure/10 text-failure border border-failure/20 flex items-center justify-center gap-1.5 hover:bg-failure/20 transition-colors active:scale-95 text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        title="Retirer admin"
+                      >
+                        {updatingAdminUserId === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldOff className="w-4 h-4" />}
+                        Retirer admin
+                      </button>
+                    )}
+                    {user.id !== currentUser.id && user.id != null && user.id > 0 && (
+                      <>
+                        <button
+                          onClick={() => setUserToEdit(user)}
+                          title="Éditer"
+                          className="h-9 w-9 rounded-lg bg-white/5 text-white border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors active:scale-95 shrink-0"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setUserToDelete({ id: user.id!, username: user.username })}
+                          title="Supprimer"
+                          className="h-9 w-9 rounded-lg bg-failure/10 text-failure border border-failure/20 flex items-center justify-center hover:bg-failure/20 transition-colors active:scale-95 shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
-                )}
               </div>
             ))}
 
@@ -1109,33 +1200,74 @@ export function AdminScreen() {
             });
             return (
             <>
-            {filteredFeedback.map((item) => (
+            {filteredFeedback.map((item) => {
+              const author = users?.find(u => u.id === item.userId);
+              return (
             <div
               key={item.id}
               className={clsx(
-                "rounded-3xl px-6 pt-6 pb-4 border",
+                "rounded-3xl px-6 pt-6 pb-4 border border-t-4",
+                item.status === 'new' && "border-t-emerald-500",
+                item.status === 'pending' && "border-t-yellow-500",
+                item.status === 'in_progress' && "border-t-blue-500",
+                item.status === 'resolved' && "border-t-green-500",
+                item.status === 'rejected' && "border-t-red-500",
                 adminUnreadItemIds.has(item.id!)
                   ? "bg-primary/10 border-primary/40 ring-2 ring-primary/30"
                   : "bg-surface border-white/5"
               )}
             >
               <div 
-                className="flex items-start justify-between mb-3 cursor-pointer"
+                className="flex items-center justify-between gap-3 mb-3 cursor-pointer"
                 onClick={() => setExpandedId(expandedId === item.id ? null : item.id!)}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
                   <span className={clsx(
-                    "text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold",
+                    "text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold shrink-0",
                     item.type === 'bug' ? "bg-failure/20 text-failure" : "bg-primary/20 text-primary"
                   )}>
                     {item.type === 'bug' ? 'Bug' : 'Suggestion'}
                   </span>
-                  <span className="text-xs text-white/30">
+                  <span className="text-xs text-white/70 shrink-0">
+                    {author ? (
+                      <>
+                        {author.displayName && (
+                          <span className="font-bold text-white/90">{author.displayName}</span>
+                        )}
+                        {author.displayName && author.username && (
+                          <span className="text-white/50"> - </span>
+                        )}
+                        {author.username ? (
+                          item.userId != null && item.userId > 0 ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/profile/${item.userId}`);
+                              }}
+                              className={author.displayName ? "hover:underline underline-offset-1 focus:outline-none focus:ring-0 text-white/70" : "font-bold text-white/90 hover:underline underline-offset-1 focus:outline-none focus:ring-0"}
+                            >
+                              @{author.username}
+                            </button>
+                          ) : (
+                            <span className="text-white/70">@{author.username}</span>
+                          )
+                        ) : (
+                          author.displayName ? null : (
+                            <span className="font-bold text-white/70">#{item.userId}</span>
+                          )
+                        )}
+                      </>
+                    ) : (
+                      <span className="font-bold text-white/70">#{item.userId}</span>
+                    )}
+                  </span>
+                  <span className="text-xs text-white/30 shrink-0">
                     {new Date(item.createdAt).toLocaleDateString()}
                   </span>
                 </div>
                 <div className={clsx(
-                  "flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full border",
+                  "flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full border shrink-0",
                   item.status === 'new' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
                   item.status === 'pending' && "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
                   item.status === 'in_progress' && "bg-blue-500/10 text-blue-500 border-blue-500/20",
@@ -1228,7 +1360,8 @@ export function AdminScreen() {
                 </button>
               </div>
             </div>
-          ))}
+          );
+            })}
           {filteredFeedback.length === 0 && (
             <div className="text-center text-white/50 py-8 bg-surface border border-white/5 rounded-3xl">
               Aucun retour pour le moment.
@@ -1253,9 +1386,9 @@ export function AdminScreen() {
                 Changer d'identité
               </h2>
               <div className="flex flex-wrap gap-2">
-                {users?.map(u => (
+                {users?.filter(u => u.id != null && u.id > 0).map((u, idx) => (
                   <button
-                    key={u.id}
+                    key={u.id ?? `sw-${idx}`}
                     onClick={() => handleSwitchUser(u)}
                     disabled={u.id === currentUser.id}
                     className={clsx(

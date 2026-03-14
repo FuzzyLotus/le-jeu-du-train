@@ -523,8 +523,8 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                   >
                     <div className={clsx("absolute top-1 left-1 w-1.5 h-1.5 rounded-full", getRarityColor(ach.rarity))} />
                     {isUnlocked && (
-                      <div className="absolute top-1 right-1">
-                        <CheckCircle2 className="w-3 h-3 text-primary" />
+                      <div className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5 text-white/40" />
                       </div>
                     )}
                     <div className="flex-1 flex items-center justify-center min-h-0">

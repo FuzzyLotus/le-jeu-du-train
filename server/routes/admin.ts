@@ -83,6 +83,38 @@ router.delete('/users/:id', requireAuth, (req: any, res: any) => {
   }
 });
 
+// PATCH /api/admin/users/:id — update user (admin only); e.g. set/clear is_admin
+router.patch('/users/:id', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) return res.status(400).json({ error: 'ID invalide' });
+
+    const { isAdmin } = req.body ?? {};
+    if (typeof isAdmin !== 'boolean') return res.status(400).json({ error: 'isAdmin (boolean) requis' });
+
+    const row = db.prepare('SELECT id, is_admin FROM users WHERE id = ?').get(targetId) as { id: number; is_admin: number } | undefined;
+    if (!row) return res.status(404).json({ error: 'Utilisateur non trouvé' });
+
+    // Prevent removing your own admin rights
+    if (req.user.id === targetId && isAdmin === false) {
+      return res.status(400).json({ error: 'Tu ne peux pas retirer tes propres droits admin.' });
+    }
+
+    db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, targetId);
+
+    const updated = db.prepare(`
+      SELECT id, username, display_name, points, total_earned, trip_count,
+             streak, longest_trip_km, total_distance_km, max_crossings_in_trip,
+             highest_score, created_at, is_admin
+      FROM users WHERE id = ?
+    `).get(targetId) as any;
+    res.json(toUserRow(updated));
+  } catch (err: any) {
+    console.error('Admin patch user error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
 // GET /api/admin/feedback — list all feedback (admin only)
 router.get('/feedback', requireAuth, requireAdmin, (req: any, res: any) => {
   try {

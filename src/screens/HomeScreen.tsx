@@ -13,6 +13,7 @@ import { Button } from '../components/Button';
 import { TripPlanner } from '../components/TripPlanner';
 import { LiveTracker } from '../components/LiveTracker';
 import { useUnreadFeedbackCount } from '../hooks/useUnreadFeedbackCount';
+import { useAdminUnreadFeedbackCount } from '../hooks/useAdminUnreadFeedbackCount';
 import clsx from 'clsx';
 
 type ActiveOption = 'none' | 'free' | 'quick' | 'gps' | 'live';
@@ -31,6 +32,7 @@ export function HomeScreen() {
   const [showMenuModal, setShowMenuModal] = useState(false);
   const location = useLocation();
   const unreadFeedbackCount = useUnreadFeedbackCount(currentUser?.id, location.pathname === '/');
+  const adminUnreadFeedbackCount = useAdminUnreadFeedbackCount(currentUser?.id ?? undefined, !!(currentUser?.isAdmin && location.pathname === '/'));
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -147,10 +149,15 @@ export function HomeScreen() {
           {currentUser.isAdmin && (
             <button 
               onClick={() => navigate('/admin')}
-              className="w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+              className="relative w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
               title="Administration"
             >
               <ShieldAlert className="w-5 h-5" />
+              {adminUnreadFeedbackCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-primary text-black text-[10px] font-bold">
+                  {adminUnreadFeedbackCount > 99 ? '99+' : adminUnreadFeedbackCount}
+                </span>
+              )}
             </button>
           )}
           <button 
@@ -208,48 +215,60 @@ export function HomeScreen() {
       {/* Zone 3: Recovery Actions */}
       <div className="mb-8">
         <button 
-          onClick={() => setActiveOption(a => a === 'free' ? 'none' : 'free')}
+          onClick={() => setActiveOption('free')}
           className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors text-sm font-medium text-white/70"
         >
           <span>Oublié de lancer l'app ? Ajouter manuellement</span>
           <CarFront className="w-4 h-4" />
         </button>
-        
-        <AnimatePresence>
-          {activeOption === 'free' && (
+      </div>
+
+      {/* Manual entry popup */}
+      <AnimatePresence>
+        {activeOption === 'free' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setActiveOption('none')}
+          >
             <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl"
             >
-              <div className="p-4 bg-surface border border-white/10 rounded-2xl mt-2">
-                <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-4">
-                  <span className="text-sm text-white/70 font-medium">Nombre de passages</span>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setFreeCrossings(Math.max(1, freeCrossings - 1))} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Minus className="w-5 h-5" /></button>
-                    <input type="number" min="1" max="999" value={freeCrossings || ''} onChange={(e) => setFreeCrossings(parseInt(e.target.value) || 0)} onBlur={() => freeCrossings < 1 && setFreeCrossings(1)} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
-                    <button onClick={() => setFreeCrossings(freeCrossings + 1)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Plus className="w-5 h-5" /></button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-4">
-                  <span className="text-sm text-white/70 font-medium">Sur combien de trajets ?</span>
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => setFreeTrips(Math.max(1, freeTrips - 1))} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Minus className="w-5 h-5" /></button>
-                    <input type="number" min="1" max="99" value={freeTrips || ''} onChange={(e) => setFreeTrips(parseInt(e.target.value) || 0)} onBlur={() => freeTrips < 1 && setFreeTrips(1)} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
-                    <button onClick={() => setFreeTrips(freeTrips + 1)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors"><Plus className="w-5 h-5" /></button>
-                  </div>
-                </div>
-                <p className="text-center text-sm mb-4 text-white/60">As-tu levé les jambes à <strong>tous</strong> les passages ?</p>
-                <div className="flex gap-3 mb-3">
-                  <Button variant="danger" fullWidth onClick={() => handleFreeTrip(false)} className="h-12">😬 Non</Button>
-                  <Button variant="primary" fullWidth onClick={() => handleFreeTrip(true)} className="h-12">🦵 Oui!</Button>
+              <h2 className="text-xl font-display text-white text-center mb-8">Ajouter manuellement</h2>
+              <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-5">
+                <span className="text-sm text-white/70 font-medium">Passages totaux</span>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setFreeCrossings(Math.max(1, freeCrossings - 1))} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors touch-manipulation"><Minus className="w-5 h-5" /></button>
+                  <input type="number" min="1" max="1000" value={freeCrossings || ''} onChange={(e) => { const v = parseInt(e.target.value); setFreeCrossings(v ? Math.min(1000, v) : 0); }} onBlur={() => { if (freeCrossings < 1) setFreeCrossings(1); if (freeCrossings > 1000) setFreeCrossings(1000); }} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
+                  <button onClick={() => setFreeCrossings(Math.min(1000, freeCrossings + 1))} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors touch-manipulation"><Plus className="w-5 h-5" /></button>
                 </div>
               </div>
+              <div className="flex items-center justify-between bg-black/20 rounded-xl p-3 mb-6">
+                <span className="text-sm text-white/70 font-medium">Trajets totaux</span>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setFreeTrips(Math.max(1, freeTrips - 1))} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors touch-manipulation"><Minus className="w-5 h-5" /></button>
+                  <input type="number" min="1" max="99" value={freeTrips || ''} onChange={(e) => setFreeTrips(parseInt(e.target.value) || 0)} onBlur={() => freeTrips < 1 && setFreeTrips(1)} className="w-16 bg-transparent text-center font-display text-2xl text-white focus:outline-none focus:ring-1 focus:ring-blue-500/50 rounded-md" />
+                  <button onClick={() => setFreeTrips(freeTrips + 1)} className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:bg-white/30 shrink-0 transition-colors touch-manipulation"><Plus className="w-5 h-5" /></button>
+                </div>
+              </div>
+              <p className="text-center text-base font-medium mb-5 text-white/70">As-tu levé les jambes à <strong className="text-white">tous</strong> les passages ?</p>
+              <div className="flex gap-3 mb-3">
+                <Button variant="danger" fullWidth onClick={() => handleFreeTrip(false)} className="h-14 text-base touch-manipulation">😬 Non</Button>
+                <Button variant="primary" fullWidth onClick={() => handleFreeTrip(true)} className="h-14 text-base touch-manipulation">🦵 Oui!</Button>
+              </div>
+              <Button fullWidth variant="secondary" onClick={() => setActiveOption('none')} className="h-14 text-base text-white/70 border-white/20 touch-manipulation">
+                Annuler
+              </Button>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Rules Modal */}
       <AnimatePresence>
