@@ -1,9 +1,25 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { db } from '../db.js';
-import { requireAuth, requireAdmin } from '../utils.js';
+import { requireAuth, requireAdmin, safeJsonParse } from '../utils.js';
 
 const router = express.Router();
+
+function feedbackRowToJson(row: any) {
+  const replies = safeJsonParse(row.replies);
+  return {
+    id: row.id,
+    userId: row.user_id,
+    type: row.type,
+    message: row.message,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    replies: Array.isArray(replies) ? replies : [],
+    ...(row.github_issue_number != null && { githubIssueNumber: row.github_issue_number }),
+    ...(row.github_issue_url != null && { githubIssueUrl: row.github_issue_url }),
+  };
+}
 
 function toUserRow(row: any) {
   return {
@@ -64,6 +80,68 @@ router.delete('/users/:id', requireAuth, (req: any, res: any) => {
   } catch (err: any) {
     console.error('Admin delete user error:', err.message);
     res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
+// GET /api/admin/feedback — list all feedback (admin only)
+router.get('/feedback', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const rows = db.prepare(`
+      SELECT * FROM feedback ORDER BY created_at DESC
+    `).all() as any[];
+    res.json(rows.map(feedbackRowToJson));
+  } catch (err: any) {
+    console.error('Admin feedback list error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la récupération des retours.' });
+  }
+});
+
+// PATCH /api/admin/feedback/:id — update feedback status (admin only)
+router.patch('/feedback/:id', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: 'ID invalide' });
+    const { status } = req.body;
+    const allowed = ['pending', 'in_progress', 'resolved', 'rejected', 'completed', 'closed'];
+    if (typeof status !== 'string' || !allowed.includes(status)) {
+      return res.status(400).json({ error: 'Statut invalide' });
+    }
+    const now = Date.now();
+    const info = db.prepare('UPDATE feedback SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id);
+    if (info.changes === 0) return res.status(404).json({ error: 'Feedback non trouvé' });
+    const row = db.prepare('SELECT * FROM feedback WHERE id = ?').get(id) as any;
+    res.json(feedbackRowToJson(row));
+  } catch (err: any) {
+    console.error('Admin feedback update error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la mise à jour.' });
+  }
+});
+
+// POST /api/admin/feedback/:id/reply — add admin reply to feedback (admin only)
+router.post('/feedback/:id/reply', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: 'ID invalide' });
+    const { message } = req.body;
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message requis' });
+    }
+    const row = db.prepare('SELECT * FROM feedback WHERE id = ?').get(id) as any;
+    if (!row) return res.status(404).json({ error: 'Feedback non trouvé' });
+    const replies: Array<{ senderId: number; isAdmin: boolean; message: string; createdAt: number }> = safeJsonParse(row.replies) || [];
+    const now = Date.now();
+    replies.push({
+      senderId: req.user.id,
+      isAdmin: true,
+      message: message.trim(),
+      createdAt: now,
+    });
+    db.prepare('UPDATE feedback SET replies = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(replies), now, id);
+    const updated = db.prepare('SELECT * FROM feedback WHERE id = ?').get(id) as any;
+    res.json(feedbackRowToJson(updated));
+  } catch (err: any) {
+    console.error('Admin feedback reply error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de l\'envoi de la réponse.' });
   }
 });
 

@@ -25,7 +25,7 @@ export function FriendsScreen() {
         const response = await fetch('/api/friends', {
           headers: AuthService.getAuthHeaders()
         });
-        
+
         if (response.status === 401) {
           useAuthStore.getState().logout();
           navigate('/login');
@@ -55,7 +55,7 @@ export function FriendsScreen() {
               id: isSender ? req.receiver_id : req.sender_id,
               username: isSender ? req.receiver_username : req.sender_username,
               displayName: isSender ? req.receiver_display_name : req.sender_display_name,
-              points: 0 // We don't have points in this query, would need a separate fetch or join
+              points: isSender ? (req.receiver_points ?? 0) : (req.sender_points ?? 0),
             };
           });
 
@@ -83,7 +83,7 @@ export function FriendsScreen() {
         headers: AuthService.getAuthHeaders(),
         body: JSON.stringify({ requestId })
       });
-      
+
       if (!response.ok) throw new Error('Failed to accept');
       
       // Move from pending to friends list locally

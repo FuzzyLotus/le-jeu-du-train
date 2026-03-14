@@ -369,10 +369,12 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                     <div key={trip.id} className="bg-surface border border-white/5 rounded-xl p-4 flex items-center justify-between">
                       <div className="flex flex-col min-w-0 mr-4">
                         <span className="text-white font-bold text-sm truncate">
-                          {showFullTripDetails ? trip.routeName : "Trajet masqué"}
+                          {showFullTripDetails
+                            ? trip.routeName
+                            : `Trajet effectué à ${new Date(trip.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false })}`}
                         </span>
                         <span className="text-white/40 text-xs">
-                          {new Date(trip.date).toLocaleDateString()} • {trip.distanceKm.toFixed(1)} km
+                          {new Date(trip.date).toLocaleDateString()} • {(trip.distanceKm ?? 0).toFixed(1)} km
                         </span>
                       </div>
                       <div className={clsx("px-2 py-1 rounded text-[10px] font-bold uppercase", trip.success ? "bg-success/20 text-success" : "bg-failure/20 text-failure")}>

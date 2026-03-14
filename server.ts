@@ -8,6 +8,8 @@ import authRouter from './server/routes/auth.js';
 import gameRouter from './server/routes/game.js';
 import usersRouter from './server/routes/users.js';
 import adminRouter from './server/routes/admin.js';
+import feedbackRouter from './server/routes/feedback.js';
+import friendsRouter from './server/routes/friends.js';
 import { requireAuth, requireAdmin, authLimiter, gameSubmitLimiter } from './server/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +54,8 @@ async function startServer() {
   });
   app.use('/api/users', usersRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api/feedback', feedbackRouter);
+  app.use('/api/friends', friendsRouter);
 
   /*app.post('/api/game/submit', requireAuth, gameSubmitLimiter, (req: any, res: any) => {
     const { score, distanceKm, crossings, isFailed, tripCount = 1 } = req.body;
