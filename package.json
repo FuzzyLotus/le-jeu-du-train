@@ -37,6 +37,11 @@
     "vite": "^6.2.0",
     "zustand": "^5.0.11"
   },
+  "overrides": {
+    "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.5.0",
+    "source-map": "^0.7.4",
+    "glob": "^13.0.0"
+  },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
