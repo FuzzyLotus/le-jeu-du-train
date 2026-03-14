@@ -529,7 +529,7 @@ export function AdminScreen() {
           </div>
         </div>
         <a 
-          href="https://github.com/DalexViau/le-jeu-du-train" 
+          href="https://github.com/FuzzyLotus/le-jeu-du-train/" 
           target="_blank" 
           rel="noopener noreferrer"
           className="flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full hover:bg-green-500/20 transition-colors cursor-pointer"
