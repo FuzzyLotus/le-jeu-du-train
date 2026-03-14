@@ -115,6 +115,60 @@ router.patch('/users/:id', requireAuth, requireAdmin, (req: any, res: any) => {
   }
 });
 
+// GET /api/admin/trips — last trips from all users for moderation (admin only)
+router.get('/trips', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const rows = db.prepare(`
+      SELECT g.id, g.user_id, g.score, g.distance_km, g.crossings, g.ended_at,
+             g.has_bridge, g.has_tunnel, g.max_elevation, g.min_elevation, g.max_bridge_length,
+             g.start_country, g.end_country, g.start_island, g.end_island,
+             u.display_name, u.username
+      FROM game_sessions g
+      LEFT JOIN users u ON u.id = g.user_id
+      ORDER BY g.ended_at DESC
+      LIMIT 200
+    `).all() as any[];
+    const trips = rows.map((r: any) => ({
+      id: r.id,
+      userId: r.user_id,
+      routeName: 'Trajet',
+      distanceKm: r.distance_km ?? 0,
+      crossingsCount: r.crossings ?? 0,
+      success: (r.score ?? 0) > 0,
+      date: r.ended_at,
+      hasBridge: r.has_bridge === 1,
+      hasTunnel: r.has_tunnel === 1,
+      maxElevation: r.max_elevation,
+      minElevation: r.min_elevation,
+      maxBridgeLength: r.max_bridge_length,
+      startCountry: r.start_country,
+      endCountry: r.end_country,
+      startIsland: r.start_island,
+      endIsland: r.end_island,
+      displayName: r.display_name ?? null,
+      username: r.username ?? null,
+    }));
+    res.json(trips);
+  } catch (err: any) {
+    console.error('Admin trips list error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la récupération des trajets.' });
+  }
+});
+
+// DELETE /api/admin/trips/:id — delete a trip (admin only)
+router.delete('/trips/:id', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: 'ID invalide' });
+    const info = db.prepare('DELETE FROM game_sessions WHERE id = ?').run(id);
+    if (info.changes === 0) return res.status(404).json({ error: 'Trajet non trouvé' });
+    res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('Admin delete trip error:', err.message);
+    res.status(500).json({ error: 'Erreur lors de la suppression.' });
+  }
+});
+
 // GET /api/admin/feedback — list all feedback (admin only)
 router.get('/feedback', requireAuth, requireAdmin, (req: any, res: any) => {
   try {

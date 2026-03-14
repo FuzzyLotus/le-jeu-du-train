@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { APP_VERSION, LAST_SYNC } from '../version';
-import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, ShieldOff, Download, Upload, Edit, Ban, RefreshCw, KeyRound } from 'lucide-react';
+import { ArrowLeft, Trash2, ShieldAlert, AlertTriangle, MessageSquare, CheckCircle2, XCircle, Clock, Loader2, Send, MessageCircle, Terminal, UserPlus, Zap, Trophy, Database, Users, Settings as SettingsIcon, Save, Megaphone, BarChart3, Shield, ShieldOff, Download, Upload, Edit, Ban, RefreshCw, KeyRound, Link2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, type SystemSetting } from '../db/database';
 import { useAuthStore } from '../store/useAuthStore';
@@ -34,6 +34,8 @@ export function AdminScreen() {
   const [newPasswordForRequest, setNewPasswordForRequest] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [moderationFilter, setModerationFilter] = useState<'all' | 'many_passages' | 'multiple_submissions'>('all');
+  const [moderationTrips, setModerationTrips] = useState<Array<Trip & { displayName?: string | null; username?: string | null }> | null>(null);
+  const [loadingModerationTrips, setLoadingModerationTrips] = useState(false);
   const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'new' | 'pending' | 'resolved' | 'in_progress' | 'rejected'>('new');
 
   // Config State
@@ -175,6 +177,29 @@ export function AdminScreen() {
       adminHasMarkedReadRef.current = false;
     }
   }, [activeTab, currentUser?.id]);
+
+  const loadModerationTrips = async () => {
+    try {
+      setLoadingModerationTrips(true);
+      const response = await fetch('/api/admin/trips', { headers: AuthService.getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setModerationTrips(data);
+      } else {
+        setModerationTrips([]);
+      }
+    } catch {
+      setModerationTrips([]);
+    } finally {
+      setLoadingModerationTrips(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'monitoring' && activeSubTab === 'moderation' && currentUser?.id) {
+      loadModerationTrips();
+    }
+  }, [activeTab, activeSubTab, currentUser?.id]);
 
   // Admin unread = unresponded messages by users (new feedback from others, or user replies from others since last read)
   useEffect(() => {
@@ -352,13 +377,23 @@ export function AdminScreen() {
     }
   };
 
-  const handleDeleteTrip = async (id: number) => {
+  const handleDeleteTrip = async (id: number, fromServer?: boolean) => {
     try {
-      await db.trips.delete(id);
-      addToast({ title: 'Succès', message: 'Trajet supprimé', type: 'success' });
-    } catch (e) {
+      if (fromServer) {
+        const res = await fetch(`/api/admin/trips/${id}`, { method: 'DELETE', headers: AuthService.getAuthHeaders() });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || res.statusText);
+        }
+        addToast({ title: 'Succès', message: 'Trajet supprimé', type: 'success' });
+        loadModerationTrips();
+      } else {
+        await db.trips.delete(id);
+        addToast({ title: 'Succès', message: 'Trajet supprimé', type: 'success' });
+      }
+    } catch (e: any) {
       console.error(e);
-      addToast({ title: 'Erreur', message: 'Échec suppression', type: 'error' });
+      addToast({ title: 'Erreur', message: e?.message || 'Échec suppression', type: 'error' });
     }
   };
 
@@ -935,20 +970,81 @@ export function AdminScreen() {
 
       {activeTab === 'monitoring' && activeSubTab === 'moderation' && (() => {
         const TWO_MIN_MS = 2 * 60 * 1000;
-        const filteredTrips = trips == null ? [] : (() => {
-          if (moderationFilter === 'all') return [...trips];
-          if (moderationFilter === 'many_passages') return trips.filter(t => t.crossingsCount > 10);
+        const toMs = (t: number | undefined) => {
+          const v = t ?? 0;
+          return v > 0 && v < 1e12 ? v * 1000 : v;
+        };
+        const tripsForModeration = (moderationTrips ?? trips) ?? [];
+        const filteredTrips = (() => {
+          if (moderationFilter === 'all') return [...tripsForModeration];
+          if (moderationFilter === 'many_passages') return tripsForModeration.filter(t => (t.crossingsCount ?? 0) >= 10);
           if (moderationFilter === 'multiple_submissions') {
-            return trips.filter(trip =>
-              trips!.some(other =>
+            return tripsForModeration.filter(trip =>
+              tripsForModeration.some(other =>
                 other.userId === trip.userId &&
                 other.id !== trip.id &&
-                Math.abs((other.date ?? 0) - (trip.date ?? 0)) <= TWO_MIN_MS
+                Math.abs(toMs(other.date) - toMs(trip.date)) <= TWO_MIN_MS
               )
             );
           }
-          return [...trips];
+          return [...tripsForModeration];
         })();
+
+        // Link groups: same user, submissions within 2 min (connected components)
+        const tripIdToGroup = new Map<number, Set<number>>();
+        const getOrCreateGroup = (tripId: number): Set<number> => {
+          let g = tripIdToGroup.get(tripId);
+          if (g) return g;
+          g = new Set([tripId]);
+          tripIdToGroup.set(tripId, g);
+          return g;
+        };
+        tripsForModeration.forEach((trip) => {
+          const id = trip.id;
+          if (id == null) return;
+          const tMs = toMs(trip.date);
+          tripsForModeration.forEach((other) => {
+            if (other.id == null || other.id === id) return;
+            if (other.userId !== trip.userId) return;
+            if (Math.abs(toMs(other.date) - tMs) > TWO_MIN_MS) return;
+            const g1 = getOrCreateGroup(id);
+            const g2 = tripIdToGroup.get(other.id);
+            if (g2 && g2 !== g1) {
+              g2.forEach((id) => g1.add(id));
+              g2.forEach((id) => tripIdToGroup.set(id, g1));
+            } else if (!g2) {
+              g1.add(other.id);
+              tripIdToGroup.set(other.id, g1);
+            }
+          });
+        });
+        const linkGroupByTripId = new Map<number, Set<number>>();
+        tripIdToGroup.forEach((group, id) => {
+          if (group.size >= 2) linkGroupByTripId.set(id, group);
+        });
+
+        // Order list so linked trips are adjacent: blocks (link groups + singles) by latest date desc
+        const used = new Set<number>();
+        const blocks: Trip[][] = [];
+        [...filteredTrips]
+          .sort((a, b) => toMs(b.date) - toMs(a.date))
+          .forEach((trip) => {
+            if (trip.id == null || used.has(trip.id)) return;
+            const group = linkGroupByTripId.get(trip.id);
+            if (group && group.size >= 2) {
+              const groupTrips = filteredTrips.filter((t) => t.id != null && group.has(t.id)).sort((a, b) => toMs(b.date) - toMs(a.date));
+              groupTrips.forEach((t) => t.id != null && used.add(t.id));
+              blocks.push(groupTrips);
+            } else {
+              used.add(trip.id);
+              blocks.push([trip]);
+            }
+          });
+        blocks.sort((a, b) => Math.max(...b.map((t) => toMs(t.date))) - Math.max(...a.map((t) => toMs(t.date))));
+        const orderedTrips: Trip[] = blocks.flat();
+        const tripToBlockIndex = new Map<number, number>();
+        blocks.forEach((block, idx) => block.forEach((t) => t.id != null && tripToBlockIndex.set(t.id, idx)));
+
         return (
         <div className="bg-surface border border-white/5 rounded-3xl p-6">
           <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
@@ -956,8 +1052,11 @@ export function AdminScreen() {
             Modération
           </h2>
           <p className="text-xs text-white/50 mb-6">
-            Les 100 derniers trajets. Surveillez les anomalies.
+            {moderationTrips != null ? 'Les 200 derniers trajets (tous utilisateurs).' : 'Les 100 derniers trajets (local).'} Surveillez les anomalies.
           </p>
+          {loadingModerationTrips && moderationTrips == null && (
+            <p className="text-sm text-white/50 mb-4">Chargement…</p>
+          )}
 
           <div className="flex flex-wrap justify-center gap-2 mb-4">
             <button
@@ -992,45 +1091,78 @@ export function AdminScreen() {
             </button>
           </div>
 
-          <div className="space-y-2">
-            {filteredTrips.map(trip => {
+          <div className="flex flex-col gap-2">
+            {orderedTrips.map((trip, index) => {
               const user = users?.find(u => u.id === trip.userId);
-              const isSuspicious = trip.distanceKm > 100 || trip.crossingsCount > 20;
+              const tripWithMeta = trip as Trip & { displayName?: string | null; username?: string | null };
+              const displayName = tripWithMeta.displayName ?? user?.displayName ?? 'Inconnu';
+              const username = tripWithMeta.username ?? user?.username ?? null;
+              const isSuspicious = (trip.distanceKm ?? 0) > 100 || (trip.crossingsCount ?? 0) > 20;
+              const blockIdx = trip.id != null ? tripToBlockIndex.get(trip.id) : undefined;
+              const block = blockIdx != null ? blocks[blockIdx] : undefined;
+              const isInLinkedBlock = block != null && block.length >= 2;
+              const isFirstInLinkedBlock = isInLinkedBlock && block && block[0].id === trip.id;
+              const isLastInLinkedBlock = isInLinkedBlock && block && block[block.length - 1].id === trip.id;
+              const nextBlockIdx = index < orderedTrips.length - 1 && orderedTrips[index + 1].id != null ? tripToBlockIndex.get(orderedTrips[index + 1].id) : undefined;
+              const isLinkedBelow = blockIdx != null && blockIdx === nextBlockIdx && blocks[blockIdx]?.length >= 2;
+              const d = new Date(toMs(trip.date));
+              const dateTimeStr = `${d.toISOString().slice(0, 10)} à ${d.getHours()}h${String(d.getMinutes()).padStart(2, '0')}`;
 
               return (
-                <div key={trip.id} className={clsx(
-                  "p-3 rounded-xl border flex items-center justify-between gap-3",
-                  isSuspicious ? "bg-red-500/5 border-red-500/20" : "bg-black/20 border-white/5"
-                )}>
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-xs text-white truncate">{user?.displayName || 'Inconnu'}</span>
-                      <span className="text-[10px] text-white/40">
-                        {new Date(trip.date).toLocaleDateString()}
-                      </span>
-                      {isSuspicious && (
-                        <span className="bg-red-500/20 text-red-500 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1">
-                          <AlertTriangle className="w-2.5 h-2.5" /> Suspect
-                        </span>
-                      )}
+                <div key={trip.id ?? index} className="relative">
+                  <div className={clsx(
+                    "p-3 rounded-xl border flex items-center justify-between gap-3",
+                    isSuspicious ? "bg-red-500/5 border-red-500/20" : "bg-black/20 border-white/5",
+                    isFirstInLinkedBlock && "border-t-4 border-t-white/25",
+                    isLastInLinkedBlock && "border-b-4 border-b-white/25"
+                  )}>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                        {username != null && username !== '' ? (
+                          <button
+                            type="button"
+                            onClick={() => trip.userId != null && navigate(`/profile/${trip.userId}`)}
+                            className="font-mono text-white/70 hover:text-primary hover:underline underline-offset-1 truncate text-left focus:outline-none focus:ring-0"
+                          >
+                            @{username}
+                          </button>
+                        ) : (
+                          <span className="font-bold text-white truncate">{displayName}</span>
+                        )}
+                        <span className="text-white/40 shrink-0">{dateTimeStr}</span>
+                        {isSuspicious && (
+                          <span className="bg-red-500/20 text-red-500 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1 shrink-0">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Suspect
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-white/60 mt-0.5 truncate">
+                        {trip.distanceKm ?? 0}km • {trip.crossingsCount ?? 0} passages
+                      </div>
                     </div>
-                    <div className="text-[10px] text-white/60 mt-0.5 truncate">
-                      {trip.distanceKm}km • {trip.crossingsCount} passages
-                    </div>
-                  </div>
 
-                  <button
-                    onClick={() => trip.id && handleDeleteTrip(trip.id)}
-                    className="w-12 h-12 rounded-full bg-white/5 text-white/40 hover:bg-failure/10 hover:text-failure flex items-center justify-center transition-colors shrink-0 active:scale-95"
-                    title="Supprimer"
-                  >
-                    <Ban className="w-6 h-6" />
-                  </button>
+                    <button
+                      onClick={() => trip.id != null && handleDeleteTrip(trip.id, moderationTrips != null)}
+                      className="w-12 h-12 rounded-full bg-white/5 text-white/40 hover:bg-failure/10 hover:text-failure flex items-center justify-center transition-colors shrink-0 active:scale-95"
+                      title="Supprimer"
+                    >
+                      <Ban className="w-6 h-6" />
+                    </button>
+                  </div>
+                  {isLinkedBelow && (
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-center pointer-events-none"
+                      style={{ bottom: 'calc(-0.5rem - 12px)' }}
+                      aria-hidden
+                    >
+                      <Link2 className="w-8 h-8 text-primary/40 rotate-90 drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]" strokeWidth={2.5} />
+                    </div>
+                  )}
                 </div>
               );
             })}
             
-            {filteredTrips.length === 0 && (
+            {orderedTrips.length === 0 && (
               <div className="text-center text-white/50 py-8">
                 Aucun trajet récent.
               </div>
