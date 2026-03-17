@@ -247,7 +247,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-full flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
@@ -257,8 +257,19 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
   const showFullTripDetails = user.preferences?.showFullTripDetails === true;
   const isOwnProfile = currentUser?.id === user.id;
 
+  const pointsDisplay = isOwnProfile ? (currentUser?.points ?? user.points) : user.points;
+  const savedRecord = user.highestScore ?? 0;
+  const liveRecord = isOwnProfile ? (currentUser?.highestScore ?? savedRecord) : savedRecord;
+  const lastTrip = recentTrips[0];
+  const lastTripScore = lastTrip == null ? undefined : (typeof (lastTrip as { score?: number }).score === 'number'
+    ? (lastTrip as { score: number }).score
+    : (lastTrip as Trip).success ? ((lastTrip as Trip).crossingsCount ?? 0) : 0);
+  const currentScore = Math.max(liveRecord, lastTripScore ?? 0);
+  const baseRecord = currentScore > savedRecord ? currentScore : (savedRecord || currentScore);
+  const recordDisplay = Math.max(baseRecord, pointsDisplay);
+
   return (
-    <div className="min-h-screen flex flex-col p-6 max-w-md mx-auto relative pb-24">
+    <div className="min-h-0 flex flex-col p-6 max-w-md mx-auto relative pb-24">
       <header className="flex items-center gap-4 mb-8 mt-4">
         {!isMe && (
           <button 
@@ -416,7 +427,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
         </div>
 
         {/* Content */}
-        <div className="min-h-[300px]">
+        <div>
           {activeTab === 'stats' && (
             showStats ? (
               <motion.section 
@@ -424,32 +435,66 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                 animate={{ opacity: 1, y: 0 }}
                 className="grid grid-cols-2 gap-3"
               >
-                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
-                  {user.pointsRank != null && user.pointsRank <= 100 && (
-                    <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.pointsRank}</span>
-                  )}
-                  {user.pointsRank != null && user.pointsRank >= 1 && user.pointsRank <= 3 && (
-                    <motion.span
-                      className={clsx(
-                        "absolute bottom-3 right-3 flex items-center justify-center",
-                        user.pointsRank === 1 && "text-amber-400/50",
-                        user.pointsRank === 2 && "text-slate-300/50",
-                        user.pointsRank === 3 && "text-amber-600/50"
-                      )}
-                      style={{
-                        filter: user.pointsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.pointsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
-                      }}
-                      animate={{ opacity: [0.7, 1, 0.7] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      aria-hidden
-                    >
-                      <Trophy className="w-6 h-6" />
-                    </motion.span>
-                  )}
-                  <BarChart3 className="w-6 h-6 text-yellow-400 mb-2" />
-                  <span className="text-2xl font-display text-white">{user.points}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
-                </div>
+                {user.preferences?.showTripHistory !== false ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('history')}
+                    aria-label="Voir l'historique des trajets"
+                    className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative w-full hover:bg-white/5 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    {user.pointsRank != null && user.pointsRank <= 100 && (
+                      <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.pointsRank}</span>
+                    )}
+                    {user.pointsRank != null && user.pointsRank >= 1 && user.pointsRank <= 3 && (
+                      <motion.span
+                        className={clsx(
+                          "absolute bottom-3 right-3 flex items-center justify-center",
+                          user.pointsRank === 1 && "text-amber-400/50",
+                          user.pointsRank === 2 && "text-slate-300/50",
+                          user.pointsRank === 3 && "text-amber-600/50"
+                        )}
+                        style={{
+                          filter: user.pointsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.pointsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                        }}
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        aria-hidden
+                      >
+                        <Trophy className="w-6 h-6" />
+                      </motion.span>
+                    )}
+                    <BarChart3 className="w-6 h-6 text-yellow-400 mb-2" />
+                    <span className="text-2xl font-display text-white">{pointsDisplay}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
+                  </button>
+                ) : (
+                  <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
+                    {user.pointsRank != null && user.pointsRank <= 100 && (
+                      <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.pointsRank}</span>
+                    )}
+                    {user.pointsRank != null && user.pointsRank >= 1 && user.pointsRank <= 3 && (
+                      <motion.span
+                        className={clsx(
+                          "absolute bottom-3 right-3 flex items-center justify-center",
+                          user.pointsRank === 1 && "text-amber-400/50",
+                          user.pointsRank === 2 && "text-slate-300/50",
+                          user.pointsRank === 3 && "text-amber-600/50"
+                        )}
+                        style={{
+                          filter: user.pointsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.pointsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                        }}
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        aria-hidden
+                      >
+                        <Trophy className="w-6 h-6" />
+                      </motion.span>
+                    )}
+                    <BarChart3 className="w-6 h-6 text-yellow-400 mb-2" />
+                    <span className="text-2xl font-display text-white">{pointsDisplay}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Points</span>
+                  </div>
+                )}
                 <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
                   {user.recordRank != null && user.recordRank <= 100 && (
                     <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.recordRank}</span>
@@ -473,7 +518,7 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                     </motion.span>
                   )}
                   <Zap className="w-6 h-6 text-yellow-400 mb-2" />
-                  <span className="text-2xl font-display text-white">{user.highestScore || 0}</span>
+                  <span className="text-2xl font-display text-white">{recordDisplay}</span>
                   <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Record</span>
                 </div>
                 <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
@@ -502,32 +547,66 @@ export function PublicProfileScreen({ isMe = false }: { isMe?: boolean }) {
                   <span className="text-2xl font-display text-white">{user.tripCount}</span>
                   <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Trajets</span>
                 </div>
-                <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
-                  {user.achievementsRank != null && user.achievementsRank <= 100 && (
-                    <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.achievementsRank}</span>
-                  )}
-                  {user.achievementsRank != null && user.achievementsRank >= 1 && user.achievementsRank <= 3 && (
-                    <motion.span
-                      className={clsx(
-                        "absolute bottom-3 right-3 flex items-center justify-center",
-                        user.achievementsRank === 1 && "text-amber-400/50",
-                        user.achievementsRank === 2 && "text-slate-300/50",
-                        user.achievementsRank === 3 && "text-amber-600/50"
-                      )}
-                      style={{
-                        filter: user.achievementsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.achievementsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
-                      }}
-                      animate={{ opacity: [0.7, 1, 0.7] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                      aria-hidden
-                    >
-                      <Trophy className="w-6 h-6" />
-                    </motion.span>
-                  )}
-                  <Trophy className="w-6 h-6 text-primary mb-2" />
-                  <span className="text-2xl font-display text-white">{achievements.size}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Succès</span>
-                </div>
+                {showStats ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('achievements')}
+                    aria-label="Voir les succès"
+                    className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative w-full hover:bg-white/5 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    {user.achievementsRank != null && user.achievementsRank <= 100 && (
+                      <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.achievementsRank}</span>
+                    )}
+                    {user.achievementsRank != null && user.achievementsRank >= 1 && user.achievementsRank <= 3 && (
+                      <motion.span
+                        className={clsx(
+                          "absolute bottom-3 right-3 flex items-center justify-center",
+                          user.achievementsRank === 1 && "text-amber-400/50",
+                          user.achievementsRank === 2 && "text-slate-300/50",
+                          user.achievementsRank === 3 && "text-amber-600/50"
+                        )}
+                        style={{
+                          filter: user.achievementsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.achievementsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                        }}
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        aria-hidden
+                      >
+                        <Trophy className="w-6 h-6" />
+                      </motion.span>
+                    )}
+                    <Trophy className="w-6 h-6 text-primary mb-2" />
+                    <span className="text-2xl font-display text-white">{achievements.size}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Succès</span>
+                  </button>
+                ) : (
+                  <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
+                    {user.achievementsRank != null && user.achievementsRank <= 100 && (
+                      <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.achievementsRank}</span>
+                    )}
+                    {user.achievementsRank != null && user.achievementsRank >= 1 && user.achievementsRank <= 3 && (
+                      <motion.span
+                        className={clsx(
+                          "absolute bottom-3 right-3 flex items-center justify-center",
+                          user.achievementsRank === 1 && "text-amber-400/50",
+                          user.achievementsRank === 2 && "text-slate-300/50",
+                          user.achievementsRank === 3 && "text-amber-600/50"
+                        )}
+                        style={{
+                          filter: user.achievementsRank === 1 ? 'drop-shadow(0 0 6px rgba(251,191,36,0.5))' : user.achievementsRank === 2 ? 'drop-shadow(0 0 6px rgba(203,213,225,0.5))' : 'drop-shadow(0 0 6px rgba(217,119,6,0.5))',
+                        }}
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        aria-hidden
+                      >
+                        <Trophy className="w-6 h-6" />
+                      </motion.span>
+                    )}
+                    <Trophy className="w-6 h-6 text-primary mb-2" />
+                    <span className="text-2xl font-display text-white">{achievements.size}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Succès</span>
+                  </div>
+                )}
                 <div className="bg-surface border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative">
                   {user.streakRank != null && user.streakRank <= 100 && (
                     <span className="absolute top-3 right-3 text-2xl font-extrabold text-white/[0.075] tabular-nums" aria-hidden>#{user.streakRank}</span>

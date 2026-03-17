@@ -3,8 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useLayoutEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer } from './components/ToastContainer';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 import { MainLayout } from './components/layout/MainLayout';
 import { useAuthStore } from './store/useAuthStore';
 import { LoginScreen } from './screens/LoginScreen';
@@ -35,6 +44,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <ToastContainer />
       <PwaInstallPrompt />
       <Routes>

@@ -8,9 +8,10 @@ interface ScoreCardProps {
   label?: string;
   className?: string;
   shakeTrigger?: number;
+  onClick?: () => void;
 }
 
-export function ScoreCard({ points, highestScore, label = "POINTS", className, shakeTrigger = 0 }: ScoreCardProps) {
+export function ScoreCard({ points, highestScore, label = "POINTS", className, shakeTrigger = 0, onClick }: ScoreCardProps) {
   const nodeRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +42,18 @@ export function ScoreCard({ points, highestScore, label = "POINTS", className, s
   }, [points]);
 
   return (
-    <div ref={containerRef} className={clsx("flex flex-col items-center justify-center p-8 rounded-3xl bg-surface border border-white/5 shadow-2xl relative overflow-hidden group", className)}>
+    <div
+      ref={containerRef}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={clsx(
+        "flex flex-col items-center justify-center p-8 rounded-3xl bg-surface border border-white/5 shadow-2xl relative overflow-hidden group",
+        onClick && "cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-colors",
+        className
+      )}
+    >
       {/* Subtle glow effect behind the number */}
       <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
         <div className="w-40 h-40 bg-primary rounded-full blur-3xl animate-pulse"></div>

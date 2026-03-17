@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, BarChart3, User, Settings } from 'lucide-react';
 import clsx from 'clsx';
@@ -11,6 +11,11 @@ export function MainLayout() {
   const navigate = useNavigate();
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
   const currentUser = useAuthStore((state) => state.currentUser);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
   useEffect(() => {
     if (currentUser) return;
@@ -34,8 +39,8 @@ export function MainLayout() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col max-w-md mx-auto relative bg-background text-white">
-      <div className="flex-1 overflow-y-auto pb-24">
+    <div className="h-screen flex flex-col max-w-md mx-auto relative bg-background text-white overflow-hidden">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
         <Outlet />
       </div>
 

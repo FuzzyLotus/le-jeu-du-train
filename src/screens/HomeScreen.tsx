@@ -116,7 +116,7 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col p-6 max-w-md mx-auto relative pb-24">
+    <div className="min-h-0 flex flex-col p-6 max-w-md mx-auto relative pb-24">
       {/* Announcement Banner */}
       {announcement && (
         <div className={clsx(
@@ -183,7 +183,7 @@ export function HomeScreen() {
       </header>
 
       {/* Main Score */}
-      <ScoreCard points={currentUser.points} highestScore={currentUser.highestScore} className="mb-8" />
+      <ScoreCard points={currentUser.points} highestScore={currentUser.highestScore} className="mb-8" onClick={() => navigate('/history')} />
 
       {/* Zone 1: Live Trip */}
       <button 

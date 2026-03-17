@@ -117,7 +117,7 @@ export function FriendsScreen() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col p-6 max-w-md mx-auto relative pb-24">
+    <div className="min-h-0 flex flex-col p-6 max-w-md mx-auto relative pb-24">
       <header className="flex items-center gap-4 mb-8 mt-4">
         <button 
           onClick={() => navigate('/')}
