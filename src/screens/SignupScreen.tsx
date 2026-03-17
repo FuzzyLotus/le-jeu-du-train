@@ -57,6 +57,7 @@ export function SignupScreen() {
             placeholder="Nom d'utilisateur"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            autoFocus
             className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
           />
           <input
@@ -64,6 +65,7 @@ export function SignupScreen() {
             placeholder="Nom d'affichage (ex: Jean)"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
+            autoComplete="name"
             className="w-full bg-surface border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/30 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
           />
           <div className="relative">
