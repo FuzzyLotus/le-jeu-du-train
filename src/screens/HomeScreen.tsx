@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Map, BarChart3, Trophy, History, CarFront, Zap, Minus, Plus, ShieldAlert, MessageSquare, Settings, Users, AlertTriangle, Info, AlertOctagon, Menu, Navigation, Activity } from 'lucide-react';
+import { LogOut, Map, BarChart3, Trophy, History, CarFront, Zap, Minus, Plus, ShieldAlert, MessageSquare, Settings, Users, AlertTriangle, Info, AlertOctagon, Menu, Navigation, Activity, Download } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
@@ -14,6 +14,7 @@ import { TripPlanner } from '../components/TripPlanner';
 import { LiveTracker } from '../components/LiveTracker';
 import { useUnreadFeedbackCount } from '../hooks/useUnreadFeedbackCount';
 import { useAdminUnreadFeedbackCount } from '../hooks/useAdminUnreadFeedbackCount';
+import { usePwaInstall } from '../hooks/usePwaInstall';
 import clsx from 'clsx';
 
 type ActiveOption = 'none' | 'free' | 'quick' | 'gps' | 'live';
@@ -33,6 +34,7 @@ export function HomeScreen() {
   const location = useLocation();
   const unreadFeedbackCount = useUnreadFeedbackCount(currentUser?.id, location.pathname === '/');
   const adminUnreadFeedbackCount = useAdminUnreadFeedbackCount(currentUser?.id ?? undefined, !!(currentUser?.isAdmin && location.pathname === '/'));
+  const { canInstall, install } = usePwaInstall();
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -135,17 +137,28 @@ export function HomeScreen() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between mb-8 mt-4">
-        <div>
-          <p className="text-white/50 text-sm font-bold uppercase tracking-wider">Salut,</p>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-display text-white">{currentUser.displayName}</h1>
+      <header className="flex items-start justify-between mb-8 mt-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
             {currentUser.isAdmin && (
-              <span className="bg-primary/20 text-primary text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Admin</span>
+              <span className="bg-primary/20 text-primary text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-bold shrink-0">Admin</span>
             )}
+            <p className="text-white/50 text-sm font-bold uppercase tracking-wider">Salut,</p>
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-display text-white line-clamp-2 break-words" title={currentUser.displayName ?? undefined}>{currentUser.displayName}</h1>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {canInstall && (
+            <button
+              onClick={install}
+              className="w-10 h-10 rounded-full bg-surface border border-white/10 flex items-center justify-center text-blue-500 hover:text-blue-400 hover:bg-white/5 transition-colors"
+              title="Installer l'app"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          )}
           {currentUser.isAdmin && (
             <button 
               onClick={() => navigate('/admin')}
