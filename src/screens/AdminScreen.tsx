@@ -641,19 +641,30 @@ export function AdminScreen() {
 
   const handleNukeDb = async () => {
     try {
-      await db.transaction('rw', [db.users, db.trips, db.achievements, db.feedback, db.friendRequests], async () => {
+      // Nuke server database first (source of truth for users, trips, etc.)
+      const res = await fetch('/api/admin/nuke-db', {
+        method: 'POST',
+        headers: AuthService.getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || res.statusText);
+      }
+      // Then clear local IndexedDB (including settings)
+      await db.transaction('rw', [db.users, db.trips, db.achievements, db.feedback, db.friendRequests, db.settings], async () => {
         await db.users.clear();
         await db.trips.clear();
         await db.achievements.clear();
         await db.feedback.clear();
         await db.friendRequests.clear();
+        await db.settings.clear();
       });
       logout();
       navigate('/login');
       addToast({ title: 'NUKE', message: 'Base de données effacée.', type: 'success' });
     } catch (e) {
       console.error(e);
-      addToast({ title: 'Erreur', message: 'Échec du nettoyage', type: 'error' });
+      addToast({ title: 'Erreur', message: (e as Error)?.message || 'Échec du nettoyage', type: 'error' });
     }
   };
 

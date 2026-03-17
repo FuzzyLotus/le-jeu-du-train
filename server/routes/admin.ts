@@ -349,6 +349,23 @@ router.patch('/config', requireAuth, requireAdmin, (req: any, res: any) => {
   }
 });
 
+// POST /api/admin/nuke-db — delete all server data (admin only). Clears users, game_sessions, feedback, etc.
+router.post('/nuke-db', requireAuth, requireAdmin, (req: any, res: any) => {
+  try {
+    db.prepare('DELETE FROM password_reset_requests').run();
+    db.prepare('DELETE FROM friend_requests').run();
+    db.prepare('DELETE FROM feedback').run();
+    db.prepare('DELETE FROM user_achievements').run();
+    db.prepare('DELETE FROM game_sessions').run();
+    db.prepare('DELETE FROM users').run();
+    db.prepare('DELETE FROM settings').run();
+    res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error('Admin nuke-db error:', err.message);
+    res.status(500).json({ error: 'Erreur lors du nettoyage de la base.' });
+  }
+});
+
 // POST /api/admin/bot-action — see server.ts (registered explicitly so it always responds)
 
 // POST /api/admin/generate-trips — add 10 dummy trips for current user (admin only, dev)
