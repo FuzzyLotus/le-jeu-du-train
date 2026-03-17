@@ -61,7 +61,7 @@ export function ScoreCard({ points, highestScore, label = "POINTS", className, s
       
       <motion.span 
         ref={nodeRef}
-        className="font-display text-7xl md:text-8xl text-primary drop-shadow-[0_0_15px_rgba(255,193,7,0.5)] z-10"
+        className="font-display text-8xl text-primary drop-shadow-[0_0_15px_rgba(255,193,7,0.5)] z-10"
       >
         {points}
       </motion.span>
