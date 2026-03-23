@@ -17,28 +17,30 @@ export default defineConfig(({mode}) => {
           name: 'Le Jeu du Train',
           short_name: 'Jeu du Train',
           description: 'Un jeu multijoueur de train',
-          theme_color: '#000000',
-          background_color: '#000000',
+          theme_color: '#F27D26',
+          background_color: '#0a0a0a',
           display: 'standalone',
           orientation: 'portrait',
           icons: [
             {
               src: '/icons/icon-192x192.png',
               sizes: '192x192',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any',
             },
             {
               src: '/icons/icon-512x512.png',
               sizes: '512x512',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any',
             },
             {
               src: '/icons/icon-maskable-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
-            }
-          ]
+              purpose: 'maskable',
+            },
+          ],
         }
       })
     ],
