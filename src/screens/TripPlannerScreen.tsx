@@ -133,7 +133,7 @@ export function TripPlannerScreen() {
 
       // Save Trip to DB
       await db.trips.add({
-        userId: currentUser.id,
+        userId: Number(currentUser.id),
         routeName: trip.routeName,
         distanceKm: trip.distanceKm,
         crossingsCount: trip.crossings.length,

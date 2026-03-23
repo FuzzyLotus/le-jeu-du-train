@@ -84,7 +84,21 @@ export function HomeScreen() {
 
     try {
       const updatedUser = await GameService.submitScore(0, 1, !success, 1);
-      
+
+      await db.trips.add({
+        userId: Number(currentUser.id),
+        routeName: 'Rapide',
+        distanceKm: 0,
+        crossingsCount: 1,
+        success,
+        date: Date.now(),
+        hasBridge: false,
+        hasTunnel: false,
+        maxElevation: 0,
+        minElevation: 0,
+        maxBridgeLength: 0,
+      });
+
       setCurrentUser(updatedUser);
       await AchievementEngine.check(updatedUser);
       setActiveOption('none');
@@ -106,6 +120,20 @@ export function HomeScreen() {
 
     try {
       const updatedUser = await GameService.submitScore(0, freeCrossings, !success, freeTrips);
+
+      await db.trips.add({
+        userId: Number(currentUser.id),
+        routeName: 'Trajet libre',
+        distanceKm: 0,
+        crossingsCount: freeCrossings,
+        success,
+        date: Date.now(),
+        hasBridge: false,
+        hasTunnel: false,
+        maxElevation: 0,
+        minElevation: 0,
+        maxBridgeLength: 0,
+      });
 
       setCurrentUser(updatedUser);
       await AchievementEngine.check(updatedUser);

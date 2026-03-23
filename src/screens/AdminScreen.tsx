@@ -301,7 +301,11 @@ export function AdminScreen() {
   }, [currentUser?.id, activeTab, loadingFeedback, feedback]);
 
   const myAchievements = useLiveQuery(
-    () => currentUser?.id ? db.achievements.where('userId').equals(currentUser.id).toArray() : [],
+    () => {
+      if (!currentUser?.id) return [];
+      const uid = Number(currentUser.id);
+      return db.achievements.filter(a => Number(a.userId) === uid).toArray();
+    },
     [currentUser?.id]
   );
 

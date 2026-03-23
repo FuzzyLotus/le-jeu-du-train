@@ -184,12 +184,37 @@ export const ACHIEVEMENTS = [
   { id: '60', title: 'Maître de Tout 🏆', description: 'Déverrouille les 59 autres succès.', rarity: 'Secret', condition: (u: User, trips: Trip[]) => (u.achievements?.length || 0) >= 59 },
 ];
 
+/** Coerce API / persisted user fields so achievement comparisons are reliable (undefined breaks `>=` checks). */
+export function normalizeUserForAchievements(user: User): User {
+  const id = Number(user.id);
+  return {
+    ...user,
+    id: Number.isFinite(id) && id > 0 ? id : user.id,
+    points: Number(user.points ?? 0),
+    totalEarned: Number(user.totalEarned ?? 0),
+    tripCount: Number(user.tripCount ?? 0),
+    streak: Number(user.streak ?? 0),
+    hasLost: Boolean(user.hasLost),
+    longestTripKm: Number(user.longestTripKm ?? 0),
+    totalDistanceKm: Number(user.totalDistanceKm ?? 0),
+    maxCrossingsInTrip: Number(user.maxCrossingsInTrip ?? 0),
+    achievements: Array.isArray(user.achievements) ? user.achievements : [],
+  };
+}
+
+function userIdForDexie(user: User): number | undefined {
+  const n = Number(user.id);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export class AchievementEngine {
   /**
    * Checks if the user has unlocked any new achievements based on their current state.
    */
   static async cleanupInvalidAchievements(userId: number) {
-    const unlocked = await db.achievements.where('userId').equals(userId).toArray();
+    const uid = Number(userId);
+    if (!Number.isFinite(uid)) return;
+    const unlocked = await db.achievements.filter(a => Number(a.userId) === uid).toArray();
     const validAchievementIds = new Set(ACHIEVEMENTS.map(a => a.id));
     
     for (const ach of unlocked) {
@@ -200,23 +225,41 @@ export class AchievementEngine {
   }
 
   static async check(user: User) {
-    if (!user.id) return;
+    const normalized = normalizeUserForAchievements(user);
+    const uid = userIdForDexie(normalized);
+    if (uid == null) return;
 
-    const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
+    // Use filter so string/number userId in IndexedDB both match (persist vs API mismatch).
+    const unlocked = await db.achievements.filter(a => Number(a.userId) === uid).toArray();
     const unlockedIds = new Set(unlocked.map(a => a.achievementId));
     const newlyUnlocked = [];
 
-    const userTrips = await db.trips.where('userId').equals(user.id).toArray();
+    const userTrips = await db.trips.filter(t => Number(t.userId) === uid).toArray();
 
     for (const ach of ACHIEVEMENTS) {
-      if (!unlockedIds.has(ach.id) && await ach.condition(user, userTrips)) {
-        // Unlock new achievement
+      if (unlockedIds.has(ach.id)) continue;
+      let passes = false;
+      try {
+        passes = !!(await ach.condition(normalized, userTrips));
+      } catch (e) {
+        console.error(`Achievement condition error (${ach.id})`, e);
+        continue;
+      }
+      if (!passes) continue;
+      try {
         await db.achievements.add({
-          userId: user.id,
+          userId: uid,
           achievementId: ach.id,
           unlockedAt: Date.now(),
         });
+        unlockedIds.add(ach.id);
         newlyUnlocked.push(ach);
+      } catch (e: any) {
+        if (e?.name === 'ConstraintError') {
+          unlockedIds.add(ach.id);
+          continue;
+        }
+        console.error(`Achievement unlock error (${ach.id})`, e);
       }
     }
 
@@ -254,19 +297,25 @@ export class AchievementEngine {
   }
 
   static async syncFromServer(user: User) {
-    if (!user?.id) return;
+    const uid = userIdForDexie(user);
+    if (uid == null) return;
     const fromServer = Array.isArray(user.achievements) ? user.achievements : [];
 
-    const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
+    const unlocked = await db.achievements.filter(a => Number(a.userId) === uid).toArray();
     const unlockedIds = new Set(unlocked.map(a => a.achievementId));
 
     for (const achId of fromServer) {
       if (!unlockedIds.has(achId)) {
-        await db.achievements.add({
-          userId: user.id,
-          achievementId: achId,
-          unlockedAt: Date.now(),
-        });
+        try {
+          await db.achievements.add({
+            userId: uid,
+            achievementId: achId,
+            unlockedAt: Date.now(),
+          });
+          unlockedIds.add(achId);
+        } catch (e: any) {
+          if (e?.name !== 'ConstraintError') throw e;
+        }
       }
     }
   }

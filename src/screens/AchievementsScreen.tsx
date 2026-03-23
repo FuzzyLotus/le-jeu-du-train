@@ -18,7 +18,8 @@ export function AchievementsScreen() {
     // Cleanup invalid achievements first
     await AchievementEngine.cleanupInvalidAchievements(currentUser.id);
     
-    return await db.achievements.where('userId').equals(currentUser.id).toArray();
+    const uid = Number(currentUser.id);
+    return await db.achievements.filter(a => Number(a.userId) === uid).toArray();
   }, [currentUser?.id]);
 
   const unlockedIds = new Set(unlocked?.map(a => a.achievementId) || []);

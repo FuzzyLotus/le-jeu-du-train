@@ -223,7 +223,7 @@ export function TripPlanner({ onClose }: TripPlannerProps) {
 
       // Save Trip to DB
       const tripToSave: any = {
-        userId: currentUser.id,
+        userId: Number(currentUser.id),
         routeName: trip.routeName,
         distanceKm: trip.distanceKm,
         crossingsCount: count,

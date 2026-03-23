@@ -96,7 +96,7 @@ export function LiveTracker({ onClose }: LiveTrackerProps) {
 
       // Save Trip to DB
       await db.trips.add({
-        userId: currentUser.id,
+        userId: Number(currentUser.id),
         routeName: 'Trajet Live',
         distanceKm: 0,
         crossingsCount: confirmedCount,

@@ -1,6 +1,6 @@
 import type { User } from '../types/models';
 import { AuthService } from './AuthService';
-import { AchievementEngine } from './AchievementEngine';
+import { AchievementEngine, normalizeUserForAchievements } from './AchievementEngine';
 
 export class GameService {
   static async submitScore(distanceKm: number, crossings: number, isFailed: boolean = false, tripCount: number = 1): Promise<User> {
@@ -15,7 +15,8 @@ export class GameService {
       throw new Error(error.error || 'Erreur lors de la sauvegarde de la partie');
     }
 
-    const user = await response.json();
+    const raw = (await response.json()) as User;
+    const user = normalizeUserForAchievements(raw);
     await AchievementEngine.syncFromServer(user);
     return user;
   }
