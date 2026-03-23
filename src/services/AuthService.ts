@@ -1,5 +1,5 @@
 import type { User } from '../types/models';
-import { AchievementEngine } from './AchievementEngine';
+import { AchievementEngine, normalizeUserForAchievements } from './AchievementEngine';
 import { db } from '../db/database';
 
 export class AuthService {
@@ -67,8 +67,10 @@ export class AuthService {
     
     if (data.token) this.setToken(data.token);
     if (data.user) {
-      await AchievementEngine.syncFromServer(data.user);
+      const u = normalizeUserForAchievements(data.user);
+      await AchievementEngine.syncFromServer(u);
       await this.syncTripsFromServer();
+      return u;
     }
     return data.user;
   }
@@ -106,8 +108,10 @@ export class AuthService {
 
     if (data.token) this.setToken(data.token);
     if (data.user) {
-      await AchievementEngine.syncFromServer(data.user);
+      const u = normalizeUserForAchievements(data.user);
+      await AchievementEngine.syncFromServer(u);
       await this.syncTripsFromServer();
+      return u;
     }
     return data.user;
   }
@@ -198,10 +202,12 @@ export class AuthService {
     } catch (e) {
       throw new Error('Réponse serveur invalide');
     }
-    
-    await AchievementEngine.syncFromServer(user);
+
+    const normalized = normalizeUserForAchievements(user);
+    await AchievementEngine.syncFromServer(normalized);
     await this.syncTripsFromServer();
-    return user;
+    await AchievementEngine.check(normalized);
+    return normalized;
   }
 
   static async getMe(): Promise<User> {
@@ -218,9 +224,12 @@ export class AuthService {
     // API sometimes wraps the user under a `user` key (server returns { user, achievements, recentTrips })
     const base = data?.user ?? data;
     const achievements = Array.isArray(data?.achievements) ? data.achievements : base?.achievements;
-    const user = { ...base, achievements: achievements ?? base?.achievements ?? [] };
+    const merged = { ...base, achievements: achievements ?? base?.achievements ?? [] };
+    const user = normalizeUserForAchievements(merged as User);
     await AchievementEngine.syncFromServer(user);
     await this.syncTripsFromServer();
+    // Re-evaluate rules against server stats + synced trips so fresh IndexedDB / stale clients recover without a manual DB wipe.
+    await AchievementEngine.check(user);
     return user;
   }
 }
