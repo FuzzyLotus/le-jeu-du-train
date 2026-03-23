@@ -216,7 +216,9 @@ export class AuthService {
 
     const data = await response.json();
     // API sometimes wraps the user under a `user` key (server returns { user, achievements, recentTrips })
-    const user = data?.user ?? data;
+    const base = data?.user ?? data;
+    const achievements = Array.isArray(data?.achievements) ? data.achievements : base?.achievements;
+    const user = { ...base, achievements: achievements ?? base?.achievements ?? [] };
     await AchievementEngine.syncFromServer(user);
     await this.syncTripsFromServer();
     return user;

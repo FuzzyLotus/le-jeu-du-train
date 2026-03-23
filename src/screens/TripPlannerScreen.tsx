@@ -111,9 +111,12 @@ export function TripPlannerScreen() {
     });
 
     const effectivePoints = calculateEffectivePoints(results);
+    // Server treats isFailed as total loss (no points, bank wiped). A trip with recoveries after a miss
+    // still earns effectivePoints — only send isFailed when this trip scores 0 but had at least one miss.
+    const serverFailed = effectivePoints === 0 && tripFailed;
 
     try {
-      const updatedUser = await GameService.submitScore(trip.distanceKm, trip.crossings.length, tripFailed);
+      const updatedUser = await GameService.submitScore(trip.distanceKm, effectivePoints, serverFailed);
 
       if (effectivePoints > 0) {
         triggerConfetti();

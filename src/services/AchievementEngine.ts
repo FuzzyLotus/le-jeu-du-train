@@ -251,7 +251,7 @@ export class AchievementEngine {
   }
 
   static async syncFromServer(user: User) {
-    if (!user.id || !user.achievements) return;
+    if (!user?.id || !Array.isArray(user.achievements)) return;
     
     const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
     const unlockedIds = new Set(unlocked.map(a => a.achievementId));

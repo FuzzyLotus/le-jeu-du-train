@@ -77,6 +77,7 @@ router.post('/submit', requireAuth, gameSubmitLimiter, (req: any, res: any) => {
       totalEarned: updatedUser.total_earned,
       tripCount: updatedUser.trip_count,
       streak: updatedUser.streak,
+      hasLost: updatedUser.has_lost === 1,
       longestTripKm: updatedUser.longest_trip_km,
       totalDistanceKm: updatedUser.total_distance_km,
       maxCrossingsInTrip: updatedUser.max_crossings_in_trip,
