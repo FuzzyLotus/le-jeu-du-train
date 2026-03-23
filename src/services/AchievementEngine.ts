@@ -237,13 +237,16 @@ export class AchievementEngine {
     if (newlyUnlocked.length > 0) {
       try {
         const { AuthService } = await import('./AuthService');
-        await fetch('/api/users/achievements', {
+        const res = await fetch('/api/users/achievements', {
           method: 'POST',
           headers: { ...AuthService.getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             achievements: newlyUnlocked.map(a => ({ achievementId: a.id, unlockedAt: Date.now() }))
           })
         });
+        if (!res.ok) {
+          console.error('Failed to sync achievements', res.status, await res.text().catch(() => ''));
+        }
       } catch (e) {
         console.error('Failed to sync achievements', e);
       }
@@ -251,12 +254,13 @@ export class AchievementEngine {
   }
 
   static async syncFromServer(user: User) {
-    if (!user?.id || !Array.isArray(user.achievements)) return;
-    
+    if (!user?.id) return;
+    const fromServer = Array.isArray(user.achievements) ? user.achievements : [];
+
     const unlocked = await db.achievements.where('userId').equals(user.id).toArray();
     const unlockedIds = new Set(unlocked.map(a => a.achievementId));
-    
-    for (const achId of user.achievements) {
+
+    for (const achId of fromServer) {
       if (!unlockedIds.has(achId)) {
         await db.achievements.add({
           userId: user.id,

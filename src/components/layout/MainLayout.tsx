@@ -10,27 +10,34 @@ export function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const setCurrentUser = useAuthStore((state) => state.setCurrentUser);
-  const currentUser = useAuthStore((state) => state.currentUser);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
 
+  // Refresh profile from the server on each app session so achievements and trips stay in sync
+  // with SQLite (persisted zustand state alone skips AuthService.getMe otherwise).
   useEffect(() => {
-    if (currentUser) return;
-    const fetchUser = async () => {
+    let cancelled = false;
+    const refresh = async () => {
+      if (!AuthService.getToken()) return;
       try {
         const user = await AuthService.getMe();
-        setCurrentUser(user);
+        if (!cancelled) setCurrentUser(user);
       } catch (e) {
         console.error('Failed to refresh user profile', e);
-        AuthService.clearToken();
-        setCurrentUser(null);
+        if (!cancelled) {
+          AuthService.clearToken();
+          setCurrentUser(null);
+        }
       }
     };
-    fetchUser();
-  }, [setCurrentUser, currentUser]);
+    refresh();
+    return () => {
+      cancelled = true;
+    };
+  }, [setCurrentUser]);
 
   const tabs = [
     { id: 'home', path: '/', icon: Home, label: 'Jeu' },
